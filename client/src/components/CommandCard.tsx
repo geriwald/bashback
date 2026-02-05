@@ -53,30 +53,33 @@ async function fetchCommandDescription(command: string): Promise<string | null> 
 }
 
 // Extract heredoc content and return command without it
-function extractHeredoc(command: string): { before: string; heredocContent: string | null; delimiter: string | null } {
-  // Match <<'DELIM' or <<"DELIM" or <<DELIM
+function extractHeredoc(command: string): { before: string; heredocContent: string | null; after: string | null } {
+  // Match <<'DELIM' or <<"DELIM" or <<DELIM or <<-DELIM
   const heredocMatch = command.match(/<<-?['"]?(\w+)['"]?/);
   if (!heredocMatch) {
-    return { before: command, heredocContent: null, delimiter: null };
+    return { before: command, heredocContent: null, after: null };
   }
 
   const delimiter = heredocMatch[1];
-  const delimiterPattern = new RegExp(`\n${delimiter}\\s*$`);
+  // Find the closing delimiter on its own line
+  const delimiterPattern = new RegExp(`\n${delimiter}(?:\n|$|\\))`);
   const endMatch = command.match(delimiterPattern);
 
   if (!endMatch) {
-    return { before: command, heredocContent: null, delimiter: null };
+    return { before: command, heredocContent: null, after: null };
   }
 
   const heredocStart = command.indexOf('\n', heredocMatch.index);
   if (heredocStart === -1) {
-    return { before: command, heredocContent: null, delimiter: null };
+    return { before: command, heredocContent: null, after: null };
   }
 
   const before = command.slice(0, heredocStart);
-  const heredocContent = command.slice(heredocStart, endMatch.index + endMatch[0].length);
+  const heredocEnd = endMatch.index! + delimiter.length + 1; // +1 for the \n before delimiter
+  const heredocContent = command.slice(heredocStart, heredocEnd);
+  const after = command.slice(heredocEnd);
 
-  return { before, heredocContent, delimiter };
+  return { before, heredocContent, after: after || null };
 }
 
 // Split command line on operators while keeping operators (handles multiline)
@@ -84,7 +87,7 @@ function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keywo
   const result: { type: 'command' | 'operator' | 'keyword' | 'heredoc'; value: string }[] = [];
 
   // First, extract heredoc content if present
-  const { before, heredocContent } = extractHeredoc(line);
+  const { before, heredocContent, after } = extractHeredoc(line);
   const commandPart = before;
 
   // Match operators: &&, ||, |, ;, and line continuation \n (with optional \)
@@ -116,6 +119,11 @@ function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keywo
   // Add heredoc content as a single block (not parsed)
   if (heredocContent) {
     result.push({ type: 'heredoc', value: heredocContent });
+  }
+
+  // Add any content after the heredoc (like closing parentheses)
+  if (after) {
+    result.push({ type: 'command', value: after });
   }
 
   return result;
