@@ -85,11 +85,11 @@ function simplifyInlineCode(command: string): { simplified: string; hasInlineCod
 }
 
 // Extract heredoc content and return command without it
-function extractHeredoc(command: string): { before: string; heredocContent: string | null; after: string | null } {
+function extractHeredoc(command: string): { before: string; heredocContent: string | null; delimiter: string | null; after: string | null } {
   // Match <<'DELIM' or <<"DELIM" or <<DELIM or <<-DELIM
   const heredocMatch = command.match(/<<-?['"]?(\w+)['"]?/);
   if (!heredocMatch) {
-    return { before: command, heredocContent: null, after: null };
+    return { before: command, heredocContent: null, delimiter: null, after: null };
   }
 
   const delimiter = heredocMatch[1];
@@ -98,12 +98,12 @@ function extractHeredoc(command: string): { before: string; heredocContent: stri
   const endMatch = command.match(delimiterPattern);
 
   if (!endMatch) {
-    return { before: command, heredocContent: null, after: null };
+    return { before: command, heredocContent: null, delimiter: null, after: null };
   }
 
   const heredocStart = command.indexOf('\n', heredocMatch.index);
   if (heredocStart === -1) {
-    return { before: command, heredocContent: null, after: null };
+    return { before: command, heredocContent: null, delimiter: null, after: null };
   }
 
   const before = command.slice(0, heredocStart);
@@ -116,15 +116,15 @@ function extractHeredoc(command: string): { before: string; heredocContent: stri
     after = '\n' + after;
   }
 
-  return { before, heredocContent, after: after || null };
+  return { before, heredocContent, delimiter, after: after || null };
 }
 
 // Split command line on operators while keeping operators (handles multiline)
-function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keyword' | 'heredoc'; value: string }[] {
-  const result: { type: 'command' | 'operator' | 'keyword' | 'heredoc'; value: string }[] = [];
+function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keyword' | 'heredoc' | 'heredoc-placeholder'; value: string }[] {
+  const result: { type: 'command' | 'operator' | 'keyword' | 'heredoc' | 'heredoc-placeholder'; value: string }[] = [];
 
   // First, extract heredoc content if present
-  const { before, heredocContent, after } = extractHeredoc(line);
+  const { before, heredocContent, delimiter, after } = extractHeredoc(line);
   const commandPart = before;
 
   // Match operators: &&, ||, |, ;, and line continuation \n (with optional \)
@@ -153,14 +153,33 @@ function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keywo
     result.push(...classifySegment(segment));
   }
 
-  // Add heredoc content as a single block (not parsed)
-  if (heredocContent) {
-    result.push({ type: 'heredoc', value: heredocContent });
+  // Add heredoc as placeholder + delimiter (like inline code)
+  if (heredocContent && delimiter) {
+    result.push({ type: 'operator', value: '\n' });
+    result.push({ type: 'heredoc-placeholder', value: `    heredoc content    ` });
+    result.push({ type: 'operator', value: '\n' });
+    result.push({ type: 'heredoc', value: delimiter });
   }
 
   // Add any content after the heredoc (like closing parentheses)
   if (after) {
-    result.push({ type: 'command', value: after });
+    // If it's just closing brackets/quotes, split them appropriately
+    const isClosingFragment = /^\s*[)"'`]+\s*$/.test(after);
+    if (isClosingFragment) {
+      // Add newline before closing fragment (like in original log)
+      result.push({ type: 'operator', value: '\n' });
+      // Split into ) as operator and quotes as string
+      const trimmed = after.trim();
+      for (const char of trimmed) {
+        if (char === ')') {
+          result.push({ type: 'operator', value: char });
+        } else if (char === '"' || char === "'" || char === '`') {
+          result.push({ type: 'heredoc', value: char }); // green like strings
+        }
+      }
+    } else {
+      result.push({ type: 'command', value: after });
+    }
   }
 
   return result;
@@ -384,7 +403,14 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
             }
             if (segment.type === 'heredoc') {
               return (
-                <span key={i} className="text-green-400/70 italic">
+                <span key={i} className="text-green-400">
+                  {segment.value}
+                </span>
+              );
+            }
+            if (segment.type === 'heredoc-placeholder') {
+              return (
+                <span key={i} className="text-gray-500 italic">
                   {segment.value}
                 </span>
               );
