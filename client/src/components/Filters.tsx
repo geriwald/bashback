@@ -1,3 +1,6 @@
+// Shell keywords (displayed in pink)
+const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'for', 'do', 'done', 'while', 'until', 'case', 'esac', 'function']);
+
 interface FiltersProps {
   workspaces: string[];
   selectedWorkspace: string | null;
@@ -105,19 +108,23 @@ export function Filters({
             >
               All
             </button>
-            {operators.map((op) => (
-              <button
-                key={op}
-                onClick={() => onSelectOperator(op)}
-                className={`rounded px-2 py-1 text-xs font-mono transition ${
-                  selectedOperator === op
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
-              >
-                {op}
-              </button>
-            ))}
+            {operators.map((op) => {
+              const isKeyword = SHELL_KEYWORDS.has(op);
+              const selectedColor = isKeyword ? 'bg-pink-600 text-white' : 'bg-yellow-600 text-white';
+              return (
+                <button
+                  key={op}
+                  onClick={() => onSelectOperator(op)}
+                  className={`rounded px-2 py-1 text-xs font-mono transition ${
+                    selectedOperator === op
+                      ? selectedColor
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  {op}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

@@ -9,6 +9,9 @@ function getBaseCommand(command: string): string {
   return command.trim().split(/\s+/)[0];
 }
 
+// Shell keywords (displayed in pink)
+const SHELL_KEYWORDS = ['if', 'then', 'else', 'elif', 'fi', 'for', 'do', 'done', 'while', 'until', 'case', 'esac', 'function'];
+
 function extractOperators(command: string): string[] {
   const operators: string[] = [];
   // Chain operators
@@ -26,6 +29,12 @@ function extractOperators(command: string): string[] {
   if (/2>&1/.test(command)) operators.push('2>&1');
   // Substitution
   if (/\$\(/.test(command)) operators.push('$()');
+  // Shell keywords (as standalone words)
+  for (const kw of SHELL_KEYWORDS) {
+    if (new RegExp(`\\b${kw}\\b`).test(command)) {
+      operators.push(kw);
+    }
+  }
   return operators;
 }
 
