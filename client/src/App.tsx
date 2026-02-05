@@ -12,6 +12,18 @@ function getBaseCommand(command: string): string {
 // Shell keywords (displayed in pink)
 const SHELL_KEYWORDS = ['if', 'then', 'else', 'elif', 'fi', 'for', 'do', 'done', 'while', 'until', 'case', 'esac', 'function'];
 
+// Strip quoted strings and heredoc content to avoid false positives
+function stripQuotedAndHeredoc(command: string): string {
+  let result = command;
+  // Remove single-quoted strings
+  result = result.replace(/'[^']*'/g, '');
+  // Remove double-quoted strings (handling escaped quotes)
+  result = result.replace(/"(?:[^"\\]|\\.)*"/g, '');
+  // Remove heredoc content (<<EOF...EOF)
+  result = result.replace(/<<-?['"]?(\w+)['"]?[\s\S]*?\n\1(?:\n|$|\))/g, '<<HEREDOC');
+  return result;
+}
+
 function extractOperators(command: string): string[] {
   const operators: string[] = [];
   // Chain operators
@@ -29,9 +41,10 @@ function extractOperators(command: string): string[] {
   if (/2>&1/.test(command)) operators.push('2>&1');
   // Substitution
   if (/\$\(/.test(command)) operators.push('$()');
-  // Shell keywords (as standalone words)
+  // Shell keywords (as standalone words) - only in shell code, not in strings/heredocs
+  const shellCode = stripQuotedAndHeredoc(command);
   for (const kw of SHELL_KEYWORDS) {
-    if (new RegExp(`\\b${kw}\\b`).test(command)) {
+    if (new RegExp(`\\b${kw}\\b`).test(shellCode)) {
       operators.push(kw);
     }
   }
