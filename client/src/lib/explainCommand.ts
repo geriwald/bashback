@@ -72,6 +72,7 @@ export const COMMAND_DESCRIPTIONS: Record<string, string> = {
   source: 'Execute script in current shell',
   alias: 'Create command shortcut',
   history: 'Command history',
+  id: 'Display user/group IDs',
   clear: 'Clear terminal',
   exit: 'Exit shell',
   man: 'Command manual',
