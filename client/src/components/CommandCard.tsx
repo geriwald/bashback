@@ -137,7 +137,6 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
   const { getCommandDescription, setCommandDescription } = useDescriptions();
   const segments = splitCommandLine(command);
   const commandSegments = segments.filter(s => s.type === 'command');
-  const operatorSegments = segments.filter(s => s.type === 'operator');
 
   // Get explanations for all commands in the chain
   const explanations = commandSegments.map(s => explainCommand(s.value));
@@ -185,15 +184,11 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
       {/* Explanations grouped by command */}
       <div className="space-y-2">
         {explanations.map((exp, i) => {
-          const prevOperator = operatorSegments[i - 1]?.value.trim();
           const defaultDesc = COMMAND_DESCRIPTIONS[exp.baseCommand] || '';
           const customDesc = getCommandDescription(exp.baseCommand, defaultDesc);
 
           return (
             <div key={i} className="flex flex-wrap items-center gap-2">
-              {prevOperator && (
-                <span className="text-yellow-500 text-xs font-mono" title={getOperatorTooltip(prevOperator)}>{prevOperator}</span>
-              )}
               <span className="rounded bg-purple-900/50 px-2 py-1 text-xs font-medium text-purple-300 font-mono">
                 {exp.baseCommand}
               </span>
