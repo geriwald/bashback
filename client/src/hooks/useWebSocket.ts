@@ -85,7 +85,11 @@ export function useWebSocket() {
     };
   }, [connect, loadHistory]);
 
-  const clearCommands = useCallback(async () => {
+  const clearDisplay = useCallback(() => {
+    setCommands([]);
+  }, []);
+
+  const clearLog = useCallback(async () => {
     try {
       await fetch(`${API_URL}/api/clear-log`, { method: 'POST' });
     } catch (error) {
@@ -94,5 +98,5 @@ export function useWebSocket() {
     setCommands([]);
   }, []);
 
-  return { commands, connected, clearCommands };
+  return { commands, connected, clearDisplay, clearLog };
 }

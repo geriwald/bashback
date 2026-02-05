@@ -5,10 +5,11 @@ interface HeaderProps {
   filteredCount: number;
   totalCount: number;
   hasFilters: boolean;
-  onClear: () => void;
+  onClearDisplay: () => void;
+  onClearLog: () => void;
 }
 
-export function Header({ connected, filteredCount, totalCount, hasFilters, onClear }: HeaderProps) {
+export function Header({ connected, filteredCount, totalCount, hasFilters, onClearDisplay, onClearLog }: HeaderProps) {
   return (
     <header className="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-6 py-4">
       <div className="flex items-center gap-4">
@@ -34,10 +35,18 @@ export function Header({ connected, filteredCount, totalCount, hasFilters, onCle
         </span>
         <SaveButton />
         <button
-          onClick={onClear}
+          onClick={onClearDisplay}
           className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition hover:bg-gray-700"
+          title="Clear display only (keeps log file)"
         >
           Clear
+        </button>
+        <button
+          onClick={onClearLog}
+          className="rounded bg-red-900/50 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-800/50"
+          title="Clear log file and display"
+        >
+          Clear Log
         </button>
       </div>
     </header>

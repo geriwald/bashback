@@ -30,7 +30,7 @@ function extractOperators(command: string): string[] {
 }
 
 export default function App() {
-  const { commands, connected, clearCommands } = useWebSocket();
+  const { commands, connected, clearDisplay, clearLog } = useWebSocket();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [selectedCommand, setSelectedCommand] = useState<string | null>(null);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
@@ -88,7 +88,8 @@ export default function App() {
           filteredCount={filteredCommands.length}
           totalCount={commands.length}
           hasFilters={!!(selectedWorkspace || selectedCommand || selectedOperator)}
-          onClear={clearCommands}
+          onClearDisplay={clearDisplay}
+          onClearLog={clearLog}
         />
 
       <div className="flex flex-1 overflow-hidden">
