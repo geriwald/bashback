@@ -10,19 +10,6 @@ interface FiltersProps {
   onSelectOperator: (operator: string | null) => void;
 }
 
-const OPERATOR_TOOLTIPS: Record<string, string> = {
-  '&&': 'AND: run next command only if previous succeeds',
-  '||': 'OR: run next command only if previous fails',
-  '|': 'PIPE: send output of previous command to next',
-  ';': 'SEQUENCE: run next command regardless of previous result',
-  '>': 'REDIRECT: write output to file (overwrite)',
-  '>>': 'APPEND: append output to file',
-  '<': 'INPUT: read input from file',
-  '<<': 'HEREDOC: read input until delimiter',
-  '2>&1': 'STDERR to STDOUT: merge error output with standard output',
-  '$()': 'COMMAND SUBSTITUTION: execute command and use its output',
-};
-
 export function Filters({
   workspaces,
   selectedWorkspace,
@@ -122,7 +109,6 @@ export function Filters({
               <button
                 key={op}
                 onClick={() => onSelectOperator(op)}
-                title={OPERATOR_TOOLTIPS[op]}
                 className={`rounded px-2 py-1 text-xs font-mono transition ${
                   selectedOperator === op
                     ? 'bg-yellow-600 text-white'
