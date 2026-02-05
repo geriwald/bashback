@@ -52,6 +52,38 @@ async function fetchCommandDescription(command: string): Promise<string | null> 
   }
 }
 
+// Detect inline code commands (node -e, python -c, etc.) and simplify them
+function simplifyInlineCode(command: string): { simplified: string; hasInlineCode: boolean; interpreter: string | null } {
+  // Patterns: node -e '...', python -c '...', ruby -e '...', perl -e '...', etc.
+  const interpreters = ['node', 'python3', 'python', 'ruby', 'perl', 'php', 'bash', 'sh', 'zsh'];
+  const interpreterPattern = new RegExp(`^(\\s*(${interpreters.join('|')})\\s+(?:-e|-c)\\s+)(['"])([\\s\\S]*)\\3(\\s*)$`);
+  const match = command.match(interpreterPattern);
+
+  if (match) {
+    const [, prefix, interpreter, quote, , suffix] = match;
+    return {
+      simplified: `${prefix}${quote}...${interpreter} code...${quote}${suffix}`,
+      hasInlineCode: true,
+      interpreter
+    };
+  }
+
+  // Also handle multiline: node -e '\n...\n'
+  const multilinePattern = new RegExp(`^(\\s*(${interpreters.join('|')})\\s+(?:-e|-c)\\s+')[\\s\\S]*'(\\s*)$`);
+  const multiMatch = command.match(multilinePattern);
+
+  if (multiMatch) {
+    const interpreter = multiMatch[2];
+    return {
+      simplified: `${multiMatch[1]}...${interpreter} code...'${multiMatch[3]}`,
+      hasInlineCode: true,
+      interpreter
+    };
+  }
+
+  return { simplified: command, hasInlineCode: false, interpreter: null };
+}
+
 // Extract heredoc content and return command without it
 function extractHeredoc(command: string): { before: string; heredocContent: string | null; after: string | null } {
   // Match <<'DELIM' or <<"DELIM" or <<DELIM or <<-DELIM
@@ -231,7 +263,11 @@ function countLines(cmd: string): number {
 
 export function CommandCard({ timestamp, workspace, command }: CommandCardProps) {
   const { getCommandDescription, setCommandDescription } = useDescriptions();
-  const segments = splitCommandLine(command);
+
+  // Simplify inline code commands (node -e, python -c, etc.)
+  const { simplified: displayCommand, hasInlineCode, interpreter } = simplifyInlineCode(command);
+
+  const segments = splitCommandLine(displayCommand);
   const commandSegments = segments.filter(s => s.type === 'command');
   const multiline = isMultiline(command);
   const lineCount = multiline ? countLines(command) : 1;
@@ -267,12 +303,20 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
         <span className="rounded bg-blue-900/50 px-2 py-1 text-xs font-medium text-blue-300">
           {workspace}
         </span>
-        {multiline && (
+        {multiline && !hasInlineCode && (
           <span
             className="rounded bg-green-900/50 px-2 py-1 text-xs font-medium text-green-300"
             title={`Multiline command (${lineCount} lines)`}
           >
             {lineCount} lines
+          </span>
+        )}
+        {hasInlineCode && (
+          <span
+            className="rounded bg-gray-700 px-2 py-1 text-xs font-medium text-gray-400 italic"
+            title={`Contains inline ${interpreter} code (hidden for readability)`}
+          >
+            {interpreter} code
           </span>
         )}
       </div>
