@@ -52,17 +52,49 @@ async function fetchCommandDescription(command: string): Promise<string | null> 
   }
 }
 
+// Extract heredoc content and return command without it
+function extractHeredoc(command: string): { before: string; heredocContent: string | null; delimiter: string | null } {
+  // Match <<'DELIM' or <<"DELIM" or <<DELIM
+  const heredocMatch = command.match(/<<-?['"]?(\w+)['"]?/);
+  if (!heredocMatch) {
+    return { before: command, heredocContent: null, delimiter: null };
+  }
+
+  const delimiter = heredocMatch[1];
+  const delimiterPattern = new RegExp(`\n${delimiter}\\s*$`);
+  const endMatch = command.match(delimiterPattern);
+
+  if (!endMatch) {
+    return { before: command, heredocContent: null, delimiter: null };
+  }
+
+  const heredocStart = command.indexOf('\n', heredocMatch.index);
+  if (heredocStart === -1) {
+    return { before: command, heredocContent: null, delimiter: null };
+  }
+
+  const before = command.slice(0, heredocStart);
+  const heredocContent = command.slice(heredocStart, endMatch.index + endMatch[0].length);
+
+  return { before, heredocContent, delimiter };
+}
+
 // Split command line on operators while keeping operators (handles multiline)
-function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keyword'; value: string }[] {
-  const result: { type: 'command' | 'operator' | 'keyword'; value: string }[] = [];
+function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keyword' | 'heredoc'; value: string }[] {
+  const result: { type: 'command' | 'operator' | 'keyword' | 'heredoc'; value: string }[] = [];
+
+  // First, extract heredoc content if present
+  const { before, heredocContent } = extractHeredoc(line);
+  const commandPart = before;
+
   // Match operators: &&, ||, |, ;, and line continuation \n (with optional \)
   const regex = /(\s*(?:&&|\|\||[|;])\s*|\\\n|\n)/g;
   let lastIndex = 0;
   let match;
 
-  while ((match = regex.exec(line)) !== null) {
+  while ((match = regex.exec(commandPart)) !== null) {
     if (match.index > lastIndex) {
-      const segment = line.slice(lastIndex, match.index);
+      const segment = commandPart.slice(lastIndex, match.index);
       result.push(...classifySegment(segment));
     }
     // For line continuation or newline
@@ -76,9 +108,14 @@ function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keywo
     lastIndex = regex.lastIndex;
   }
 
-  if (lastIndex < line.length) {
-    const segment = line.slice(lastIndex);
+  if (lastIndex < commandPart.length) {
+    const segment = commandPart.slice(lastIndex);
     result.push(...classifySegment(segment));
+  }
+
+  // Add heredoc content as a single block (not parsed)
+  if (heredocContent) {
+    result.push({ type: 'heredoc', value: heredocContent });
   }
 
   return result;
@@ -246,6 +283,13 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
             if (segment.type === 'keyword') {
               return (
                 <span key={i} className="text-pink-400 font-semibold">
+                  {segment.value}
+                </span>
+              );
+            }
+            if (segment.type === 'heredoc') {
+              return (
+                <span key={i} className="text-green-400/70 italic">
                   {segment.value}
                 </span>
               );
