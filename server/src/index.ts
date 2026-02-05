@@ -182,13 +182,15 @@ async function main() {
       `^\\s*(--${flagPattern})(?:[=\\s]\\S*)?\\s{2,}(.+)`,
       'i'
     );
-    // Pattern for man pages
+    // Pattern for man pages: -x, --long on its own line, description on next line
     const manPattern = new RegExp(`^\\s*-${flagPattern}[,\\s]`);
+    // Git-style: -A, --all, --no-ignore-removal (multiple aliases, desc on next line)
+    const gitStylePattern = new RegExp(`^\\s*(-${flagPattern})(?:,\\s*(--[\\w-]+))?(?:,\\s*--[\\w-]+)*\\s*$`, 'i');
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // Try full pattern first (short + long)
+      // Try full pattern first (short + long + inline description)
       let match = line.match(fullPattern);
       if (match) {
         let desc = match[3].trim();
@@ -218,7 +220,30 @@ async function main() {
         };
       }
 
-      // Try man page pattern
+      // Try git-style pattern (flag on one line, description on next)
+      match = line.match(gitStylePattern);
+      if (match && i + 1 < lines.length) {
+        const nextLine = lines[i + 1].trim();
+        if (nextLine && !nextLine.startsWith('-')) {
+          let desc = nextLine;
+          // Collect more lines if they're indented
+          for (let j = i + 2; j < lines.length && j < i + 4; j++) {
+            if (lines[j].match(/^\s{4,}\S/) && !lines[j].trim().startsWith('-')) {
+              desc += ' ' + lines[j].trim();
+            } else {
+              break;
+            }
+          }
+          if (desc.length > 100) desc = desc.substring(0, 97) + '...';
+          return {
+            shortForm: match[1],
+            longForm: match[2] || null,
+            explanation: desc
+          };
+        }
+      }
+
+      // Try man page pattern (fallback)
       if (line.match(manPattern) && i + 1 < lines.length) {
         const nextLine = lines[i + 1].trim();
         if (nextLine && !nextLine.startsWith('-')) {
@@ -262,7 +287,11 @@ async function main() {
 
     try {
       // Load existing custom descriptions
-      let existing = { commands: {}, flags: {}, longForms: {} };
+      let existing: {
+        commands: Record<string, string>;
+        flags: Record<string, Record<string, string>>;
+        longForms: Record<string, Record<string, string>>;
+      } = { commands: {}, flags: {}, longForms: {} };
       try {
         const content = await readFile(customDescriptionsPath, 'utf-8');
         existing = JSON.parse(content);
@@ -271,7 +300,7 @@ async function main() {
       }
 
       // Merge with new descriptions (new ones override existing)
-      const merged = {
+      const merged: typeof existing = {
         commands: { ...existing.commands, ...commands },
         flags: { ...existing.flags },
         longForms: { ...existing.longForms, ...(longForms || {}) },
