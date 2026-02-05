@@ -14,7 +14,7 @@ const OPERATOR_TOOLTIPS: Record<string, string> = {
   '||': 'OR: run next command only if previous fails',
   '|': 'PIPE: send output of previous command to next',
   ';': 'SEQUENCE: run next command regardless of previous result',
-  '<<': 'HEREDOC: inline multi-line input',
+  '<<': 'HEREDOC: read input until delimiter (e.g., <<EOF...EOF)',
   '>>': 'APPEND: append output to file',
   '>': 'REDIRECT: write output to file (overwrite)',
   '<': 'INPUT: read input from file',
