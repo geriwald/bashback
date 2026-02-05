@@ -143,6 +143,7 @@ const FLAGS: Record<string, Record<string, string>> = {
     '-d': 'Delete branch',
     '-D': 'Force delete branch',
     '-f': 'Force operation',
+    '-i': 'Interactive mode (rebase)',
     '-u': 'Set upstream',
     '-p': 'Push all branches',
     '-n': 'Limit number of commits to show',
@@ -157,6 +158,7 @@ const FLAGS: Record<string, Record<string, string>> = {
     '--all': 'All branches',
     '--stat': 'Change statistics',
     '--patch': 'Interactive hunk mode',
+    '--autosquash': 'Auto-arrange fixup/squash commits',
     '-v': 'Verbose mode',
   },
   ls: {
@@ -345,7 +347,14 @@ export interface CommandExplanation {
 
 export function explainCommand(command: string): CommandExplanation {
   const parts = command.trim().split(/\s+/);
-  const baseCommand = parts[0];
+
+  // Skip environment variable assignments (VAR=value) to find actual command
+  let commandStartIndex = 0;
+  while (commandStartIndex < parts.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(parts[commandStartIndex])) {
+    commandStartIndex++;
+  }
+
+  const baseCommand = parts[commandStartIndex] || parts[0];
   const flags: FlagExplanation[] = [];
   const unknownFlags: string[] = [];
   const args: string[] = [];
@@ -370,7 +379,7 @@ export function explainCommand(command: string): CommandExplanation {
   // Commands where -N means -n N (numeric shorthand)
   const numericShorthandCommands = ['tail', 'head', 'git'];
 
-  let i = 1;
+  let i = commandStartIndex + 1;
   while (i < parts.length) {
     const part = parts[i];
 

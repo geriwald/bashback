@@ -6,7 +6,14 @@ import { Header } from './components/Header';
 import { DescriptionsProvider } from './context/DescriptionsContext';
 
 function getBaseCommand(command: string): string {
-  return command.trim().split(/\s+/)[0];
+  const parts = command.trim().split(/\s+/);
+  // Skip environment variable assignments (VAR=value)
+  for (const part of parts) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*=/.test(part)) {
+      return part;
+    }
+  }
+  return parts[0];
 }
 
 // Shell keywords (displayed in pink)
