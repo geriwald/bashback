@@ -349,8 +349,53 @@ export interface CommandExplanation {
 // Commands that have subcommands (git add, docker run, npm install, etc.)
 const COMMANDS_WITH_SUBCOMMANDS = new Set(['git', 'docker', 'npm', 'yarn', 'pnpm', 'kubectl', 'cargo', 'go']);
 
+/**
+ * Tokenize a command string respecting shell quotes.
+ * Content inside single or double quotes is kept as a single token.
+ */
+export function shellTokenize(cmd: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+
+    if (inSingleQuote) {
+      current += ch;
+      if (ch === "'") inSingleQuote = false;
+    } else if (inDoubleQuote) {
+      current += ch;
+      if (ch === '"' && i > 0 && cmd[i - 1] !== '\\') inDoubleQuote = false;
+    } else if (ch === "'") {
+      current += ch;
+      inSingleQuote = true;
+    } else if (ch === '"') {
+      current += ch;
+      inDoubleQuote = true;
+    } else if (/\s/.test(ch)) {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+/** Check if a token is a quoted string (starts and ends with matching quotes) */
+export function isQuotedToken(token: string): boolean {
+  return (token.startsWith("'") && token.endsWith("'") && token.length > 1) ||
+    (token.startsWith('"') && token.endsWith('"') && token.length > 1);
+}
+
 export function explainCommand(command: string): CommandExplanation {
-  const parts = command.trim().split(/\s+/);
+  const parts = shellTokenize(command.trim());
 
   // Skip environment variable assignments (VAR=value) to find actual command
   let commandStartIndex = 0;
@@ -399,6 +444,13 @@ export function explainCommand(command: string): CommandExplanation {
   let i = commandStartIndex + 1;
   while (i < parts.length) {
     const part = parts[i];
+
+    // Skip quoted tokens entirely - they're arguments, not flags
+    if (isQuotedToken(part)) {
+      args.push(part);
+      i++;
+      continue;
+    }
 
     if (part.startsWith('-')) {
       // Check for --flag=value format
