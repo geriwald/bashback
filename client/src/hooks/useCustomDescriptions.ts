@@ -100,7 +100,7 @@ export function useCustomDescriptions() {
       const data = await res.json();
       if (data.success) {
         // Clear localStorage after saving to code
-        setDescriptions({ commands: {}, flags: {} });
+        setDescriptions({ commands: {}, flags: {}, longForms: {} });
         return true;
       }
       return false;
@@ -115,6 +115,10 @@ export function useCustomDescriptions() {
     return cmdCount + flagCount;
   }, [descriptions]);
 
+  const clearDescriptions = useCallback(() => {
+    setDescriptions({ commands: {}, flags: {}, longForms: {} });
+  }, []);
+
   return {
     setCommandDescription,
     setFlagDescription,
@@ -125,5 +129,6 @@ export function useCustomDescriptions() {
     hasCustomDescriptions,
     saveToCode,
     getCustomCount,
+    clearDescriptions,
   };
 }

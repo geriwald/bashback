@@ -2,14 +2,10 @@ import { SaveButton } from './SaveButton';
 
 interface HeaderProps {
   connected: boolean;
-  filteredCount: number;
-  totalCount: number;
-  hasFilters: boolean;
-  onClearDisplay: () => void;
   onClearLog: () => void;
 }
 
-export function Header({ connected, filteredCount, totalCount, hasFilters, onClearDisplay, onClearLog }: HeaderProps) {
+export function Header({ connected, onClearLog }: HeaderProps) {
   return (
     <header className="relative flex items-center justify-between border-b border-gray-800 bg-gray-900 px-6 py-4">
       {/* Left: connection status */}
@@ -25,30 +21,16 @@ export function Header({ connected, filteredCount, totalCount, hasFilters, onCle
       </div>
 
       {/* Center: title + tagline */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
+      <div className="absolute left-1/2 -translate-x-1/2 text-center">
         <h1 className="text-xl font-bold text-white">
           <span className="text-purple-400">bash</span>back
         </h1>
-        <p className="text-xs text-gray-500 italic leading-tight">
-          a local Claude Code bash log tool,<br />
-          so it doesn't make you completely dumb
-        </p>
+        <p className="text-xs text-gray-500 italic">don't let Claude do all the thinking</p>
       </div>
 
       {/* Right: controls */}
       <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-500">
-          {filteredCount} command{filteredCount !== 1 ? 's' : ''}
-          {hasFilters && ` (${totalCount} total)`}
-        </span>
         <SaveButton />
-        <button
-          onClick={onClearDisplay}
-          className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300 transition hover:bg-gray-700"
-          title="Clear display only (keeps log file)"
-        >
-          Clear
-        </button>
         <button
           onClick={onClearLog}
           className="rounded bg-red-900/50 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-800/50"
