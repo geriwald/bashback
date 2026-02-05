@@ -218,12 +218,15 @@ function isInlineCodePlaceholder(part: string): { match: boolean; interpreter: s
   return { match: false, interpreter: null };
 }
 
+// Check if a word is an environment variable assignment (VAR=value)
+const ENV_VAR_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
 // Render a single command with custom highlighting
 function renderCommand(cmd: string, knownFlags: Set<string>) {
   // Split on whitespace AND keep redirections/substitutions as separate tokens
   const parts = cmd.trim().split(/(\s+|(?:2>&1|>&2|&>|2>>|2>|>>|>|<<|<|\$\(|\)))/);
   const elements: JSX.Element[] = [];
-  let isFirstWord = true;
+  let foundCommand = false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
@@ -246,9 +249,24 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
       continue;
     }
 
-    // Base command (first word)
-    if (isFirstWord) {
-      isFirstWord = false;
+    // Environment variable assignment (VAR=value) - render in blue
+    if (!foundCommand && ENV_VAR_PATTERN.test(part)) {
+      const eqIndex = part.indexOf('=');
+      const varName = part.slice(0, eqIndex);
+      const varValue = part.slice(eqIndex + 1);
+      elements.push(
+        <span key={key} title="Environment variable">
+          <span className="text-blue-400">{varName}</span>
+          <span className="text-yellow-500">=</span>
+          <span className="text-green-400">{varValue}</span>
+        </span>
+      );
+      continue;
+    }
+
+    // Base command (first non-env-var word)
+    if (!foundCommand) {
+      foundCommand = true;
       elements.push(
         <span key={key} className="text-purple-400 font-semibold">{part}</span>
       );
