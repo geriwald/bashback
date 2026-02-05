@@ -48,9 +48,11 @@ fi
 # Timestamp
 ts=$(date '+%Y-%m-%d %H:%M:%S')
 
-# Logger au format bashback
+# Logger au format JSON Lines (préserve les commandes multilignes)
 if [ -n "$cmd" ]; then
-    echo "[$ts] [$workspace] CMD: $cmd" >> "$LOG_FILE"
+    # Utiliser jq pour créer du JSON valide avec échappement correct des newlines
+    jq -nc --arg ts "$ts" --arg ws "$workspace" --arg cmd "$cmd" \
+        '{timestamp: $ts, workspace: $ws, command: $cmd}' >> "$LOG_FILE"
 fi
 
 # Exit 0 = ne pas bloquer l'exécution

@@ -5,12 +5,35 @@ export interface ParsedCommand {
   id: string;
 }
 
-// Format: [2026-02-05 14:32:01] [workspace] CMD: command
+// Legacy format: [2026-02-05 14:32:01] [workspace] CMD: command
 const LINE_REGEX = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] CMD: (.+)$/;
 // Fallback for old format without workspace
 const LINE_REGEX_LEGACY = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] CMD: (.+)$/;
 
-export function parseLine(line: string): ParsedCommand | null {
+interface JsonLogEntry {
+  timestamp: string;
+  workspace: string;
+  command: string;
+}
+
+function parseJsonLine(line: string): ParsedCommand | null {
+  try {
+    const entry = JSON.parse(line) as JsonLogEntry;
+    if (entry.timestamp && entry.command) {
+      return {
+        timestamp: entry.timestamp,
+        workspace: entry.workspace || 'unknown',
+        command: entry.command,
+        id: `${entry.timestamp}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      };
+    }
+  } catch {
+    // Not JSON, try legacy format
+  }
+  return null;
+}
+
+function parseLegacyLine(line: string): ParsedCommand | null {
   let match = line.match(LINE_REGEX);
   if (match) {
     return {
@@ -21,7 +44,7 @@ export function parseLine(line: string): ParsedCommand | null {
     };
   }
 
-  // Try legacy format
+  // Try legacy format without workspace
   match = line.match(LINE_REGEX_LEGACY);
   if (match) {
     return {
@@ -33,6 +56,15 @@ export function parseLine(line: string): ParsedCommand | null {
   }
 
   return null;
+}
+
+export function parseLine(line: string): ParsedCommand | null {
+  // Try JSON format first (new format with multiline support)
+  const jsonResult = parseJsonLine(line);
+  if (jsonResult) return jsonResult;
+
+  // Fall back to legacy text format
+  return parseLegacyLine(line);
 }
 
 export function parseLog(content: string): ParsedCommand[] {
