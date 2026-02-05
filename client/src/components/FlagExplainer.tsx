@@ -62,7 +62,6 @@ function FlagItem({ flag, baseCommand, subCommand, customDesc, customLongForm, o
 
   // Display format: -x, --long-form or just -x
   // Don't repeat if flag is already long form or if longForm equals flag
-  const isLongForm = flag.flag.startsWith('--');
   const hasLongForm = !!customLongForm && customLongForm !== flag.flag;
   const displayFlag = hasLongForm ? `${flag.flag}, ${customLongForm}` : flag.flag;
 
