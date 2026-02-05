@@ -22,6 +22,8 @@ const OPERATOR_TOOLTIPS: Record<string, string> = {
   '2>': 'STDERR: redirect error output',
   '&>': 'ALL OUTPUT: redirect both stdout and stderr',
   '>&2': 'TO STDERR: send output to error stream',
+  '$(': 'COMMAND SUBSTITUTION: execute command and use its output',
+  ')': 'END: closing bracket',
 };
 
 function getOperatorTooltip(op: string): string {
@@ -62,13 +64,13 @@ function splitCommandLine(line: string): { type: 'command' | 'operator'; value: 
   return result;
 }
 
-// Redirection patterns for highlighting
-const REDIRECTION_PATTERN = /^(2>&1|>&2|&>|2>>|2>|>>|>|<<|<)$/;
+// Redirection and substitution patterns for highlighting
+const SPECIAL_PATTERN = /^(2>&1|>&2|&>|2>>|2>|>>|>|<<|<|\$\(|\))$/;
 
 // Render a single command with custom highlighting
 function renderCommand(cmd: string, knownFlags: Set<string>) {
-  // Split on whitespace AND keep redirections as separate tokens
-  const parts = cmd.trim().split(/(\s+|(?:2>&1|>&2|&>|2>>|2>|>>|>|<<|<))/);
+  // Split on whitespace AND keep redirections/substitutions as separate tokens
+  const parts = cmd.trim().split(/(\s+|(?:2>&1|>&2|&>|2>>|2>|>>|>|<<|<|\$\(|\)))/);
   const elements: JSX.Element[] = [];
   let isFirstWord = true;
 
@@ -83,8 +85,8 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
       continue;
     }
 
-    // Redirections
-    if (REDIRECTION_PATTERN.test(part)) {
+    // Redirections and special operators
+    if (SPECIAL_PATTERN.test(part)) {
       elements.push(
         <span key={key} className="text-yellow-500 font-bold" title={getOperatorTooltip(part)}>
           {part}
