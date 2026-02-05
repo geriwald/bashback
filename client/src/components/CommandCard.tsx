@@ -1,4 +1,4 @@
-import { explainCommand, COMMAND_DESCRIPTIONS } from '../lib/explainCommand';
+import { explainCommand, COMMAND_DESCRIPTIONS, shellTokenize, isQuotedToken } from '../lib/explainCommand';
 import { FlagExplainer } from './FlagExplainer';
 import { EditableText } from './EditableText';
 import { useDescriptions } from '../context/DescriptionsContext';
@@ -50,6 +50,83 @@ async function fetchCommandDescription(command: string): Promise<string | null> 
   } catch {
     return null;
   }
+}
+
+// SSH flags that take a value argument
+const SSH_FLAGS_WITH_VALUE = new Set([
+  '-i', '-p', '-l', '-L', '-R', '-D', '-J', '-o', '-F',
+  '-b', '-c', '-E', '-S', '-W', '-e', '-m', '-O', '-Q',
+]);
+
+const IP_PATTERN = /\d+\.\d+\.\d+\.\d+/;
+
+interface SSHInfo {
+  hostDisplay: string;
+  remoteCommand: string;
+}
+
+/**
+ * Parse an SSH command: extract host (redacted if sensitive) and remote command.
+ * Returns null if not an SSH command or no remote command.
+ */
+function parseSSHCommand(command: string): SSHInfo | null {
+  const tokens = shellTokenize(command.trim());
+  if (tokens[0] !== 'ssh' && tokens[0] !== 'sshpass') return null;
+
+  // Skip sshpass prefix if present (sshpass -p xxx ssh ...)
+  let start = 0;
+  if (tokens[0] === 'sshpass') {
+    start = tokens.indexOf('ssh');
+    if (start === -1) return null;
+  }
+
+  let host: string | null = null;
+  let remoteStart = -1;
+
+  let i = start + 1; // skip 'ssh'
+  while (i < tokens.length) {
+    const token = tokens[i];
+
+    if (token.startsWith('-')) {
+      if (SSH_FLAGS_WITH_VALUE.has(token)) {
+        i += 2; // skip flag + value
+      } else {
+        i++; // skip standalone flag
+      }
+    } else {
+      // First non-flag token is the host
+      host = token;
+      remoteStart = i + 1;
+      break;
+    }
+  }
+
+  if (!host || remoteStart >= tokens.length) return null;
+
+  // Build remote command from remaining tokens
+  const remoteParts = tokens.slice(remoteStart);
+  let remoteCommand: string;
+  if (remoteParts.length === 1 && isQuotedToken(remoteParts[0])) {
+    // Single quoted string: unquote it
+    remoteCommand = remoteParts[0].slice(1, -1);
+  } else {
+    remoteCommand = remoteParts.join(' ');
+  }
+
+  if (!remoteCommand.trim()) return null;
+
+  // Redact host if it contains IP addresses
+  let hostDisplay = host;
+  if (IP_PATTERN.test(host)) {
+    const atIndex = host.indexOf('@');
+    hostDisplay = atIndex !== -1 ? host.slice(0, atIndex + 1) + '***' : '***';
+  }
+  // Redact user@host if password-like patterns exist
+  if (host.includes(':') && host.includes('@')) {
+    hostDisplay = host.split('@')[0] + '@***';
+  }
+
+  return { hostDisplay, remoteCommand };
 }
 
 // Detect inline code commands (node -e, python -c, etc.) and simplify them
@@ -120,6 +197,7 @@ function extractHeredoc(command: string): { before: string; heredocContent: stri
 }
 
 // Split command line on operators while keeping operators (handles multiline)
+// Quote-aware: does not split on operators inside single or double quotes
 function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keyword' | 'heredoc' | 'heredoc-placeholder'; value: string }[] {
   const result: { type: 'command' | 'operator' | 'keyword' | 'heredoc' | 'heredoc-placeholder'; value: string }[] = [];
 
@@ -127,30 +205,100 @@ function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keywo
   const { before, heredocContent, delimiter, after } = extractHeredoc(line);
   const commandPart = before;
 
-  // Match operators: &&, ||, |, ;, and line continuation \n (with optional \)
-  const regex = /(\s*(?:&&|\|\||[|;])\s*|\\\n|\n)/g;
-  let lastIndex = 0;
-  let match;
+  // Walk through the command character by character, tracking quote state
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
 
-  while ((match = regex.exec(commandPart)) !== null) {
-    if (match.index > lastIndex) {
-      const segment = commandPart.slice(lastIndex, match.index);
-      result.push(...classifySegment(segment));
+  for (let i = 0; i < commandPart.length; i++) {
+    const ch = commandPart[i];
+
+    // Track quote state
+    if (inSingleQuote) {
+      current += ch;
+      if (ch === "'") inSingleQuote = false;
+      continue;
     }
-    // For line continuation or newline
-    if (match[1] === '\\\n') {
+    if (inDoubleQuote) {
+      current += ch;
+      if (ch === '"' && i > 0 && commandPart[i - 1] !== '\\') inDoubleQuote = false;
+      continue;
+    }
+    if (ch === "'") {
+      current += ch;
+      inSingleQuote = true;
+      continue;
+    }
+    if (ch === '"') {
+      current += ch;
+      inDoubleQuote = true;
+      continue;
+    }
+
+    // Outside quotes: check for operators
+    const remaining = commandPart.slice(i);
+
+    // Line continuation
+    if (remaining.startsWith('\\\n')) {
+      if (current.trim()) result.push(...classifySegment(current));
+      current = '';
       result.push({ type: 'operator', value: ' \\\n' });
-    } else if (match[1] === '\n') {
-      result.push({ type: 'operator', value: '\n' });
-    } else {
-      result.push({ type: 'operator', value: match[1] });
+      i++; // skip \n (loop will advance past \)
+      continue;
     }
-    lastIndex = regex.lastIndex;
+
+    // Newline
+    if (ch === '\n') {
+      if (current.trim()) result.push(...classifySegment(current));
+      current = '';
+      result.push({ type: 'operator', value: '\n' });
+      continue;
+    }
+
+    // && (must check before single &)
+    if (remaining.startsWith('&&')) {
+      if (current.trim()) result.push(...classifySegment(current));
+      current = '';
+      result.push({ type: 'operator', value: ' && ' });
+      i++; // skip second &
+      // Skip trailing whitespace
+      while (i + 1 < commandPart.length && commandPart[i + 1] === ' ') i++;
+      continue;
+    }
+
+    // || (must check before single |)
+    if (remaining.startsWith('||')) {
+      if (current.trim()) result.push(...classifySegment(current));
+      current = '';
+      result.push({ type: 'operator', value: ' || ' });
+      i++; // skip second |
+      while (i + 1 < commandPart.length && commandPart[i + 1] === ' ') i++;
+      continue;
+    }
+
+    // | (pipe)
+    if (ch === '|') {
+      if (current.trim()) result.push(...classifySegment(current));
+      current = '';
+      result.push({ type: 'operator', value: ' | ' });
+      while (i + 1 < commandPart.length && commandPart[i + 1] === ' ') i++;
+      continue;
+    }
+
+    // ;
+    if (ch === ';') {
+      if (current.trim()) result.push(...classifySegment(current));
+      current = '';
+      result.push({ type: 'operator', value: ' ; ' });
+      while (i + 1 < commandPart.length && commandPart[i + 1] === ' ') i++;
+      continue;
+    }
+
+    current += ch;
   }
 
-  if (lastIndex < commandPart.length) {
-    const segment = commandPart.slice(lastIndex);
-    result.push(...classifySegment(segment));
+  if (current.trim()) {
+    result.push(...classifySegment(current));
   }
 
   // Add heredoc as placeholder + delimiter (like inline code)
@@ -221,10 +369,77 @@ function isInlineCodePlaceholder(part: string): { match: boolean; interpreter: s
 // Check if a word is an environment variable assignment (VAR=value)
 const ENV_VAR_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
+// Quote-aware tokenizer for rendering: splits on whitespace and special operators
+// while keeping quoted strings intact
+function renderTokenize(cmd: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  const OPERATORS = ['2>&1', '>&2', '&>', '2>>', '2>', '>>', '>', '<<', '<', '$(', ')'];
+
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+
+    if (inSingleQuote) {
+      current += ch;
+      if (ch === "'") inSingleQuote = false;
+      continue;
+    }
+    if (inDoubleQuote) {
+      current += ch;
+      if (ch === '"' && i > 0 && cmd[i - 1] !== '\\') inDoubleQuote = false;
+      continue;
+    }
+    if (ch === "'") {
+      current += ch;
+      inSingleQuote = true;
+      continue;
+    }
+    if (ch === '"') {
+      current += ch;
+      inDoubleQuote = true;
+      continue;
+    }
+
+    // Check for special operators (longest first)
+    const remaining = cmd.slice(i);
+    let matched = false;
+    for (const op of OPERATORS) {
+      if (remaining.startsWith(op)) {
+        if (current) { result.push(current); current = ''; }
+        result.push(op);
+        i += op.length - 1;
+        matched = true;
+        break;
+      }
+    }
+    if (matched) continue;
+
+    // Whitespace
+    if (/\s/.test(ch)) {
+      if (current) { result.push(current); current = ''; }
+      let ws = ch;
+      while (i + 1 < cmd.length && /\s/.test(cmd[i + 1])) {
+        ws += cmd[i + 1];
+        i++;
+      }
+      result.push(ws);
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current) result.push(current);
+  return result;
+}
+
 // Render a single command with custom highlighting
 function renderCommand(cmd: string, knownFlags: Set<string>) {
-  // Split on whitespace AND keep redirections/substitutions as separate tokens
-  const parts = cmd.trim().split(/(\s+|(?:2>&1|>&2|&>|2>>|2>|>>|>|<<|<|\$\(|\)))/);
+  // Quote-aware split on whitespace and redirections/substitutions
+  const parts = renderTokenize(cmd.trim());
   const elements: JSX.Element[] = [];
   let foundCommand = false;
 
@@ -344,13 +559,17 @@ function countLines(cmd: string): number {
 export function CommandCard({ timestamp, workspace, command }: CommandCardProps) {
   const { getCommandDescription, setCommandDescription } = useDescriptions();
 
+  // Detect SSH commands: extract remote command and display it as if local
+  const sshInfo = parseSSHCommand(command);
+  const effectiveCommand = sshInfo ? sshInfo.remoteCommand : command;
+
   // Simplify inline code commands (node -e, python -c, etc.)
-  const { simplified: displayCommand, hasInlineCode, interpreter } = simplifyInlineCode(command);
+  const { simplified: displayCommand, hasInlineCode, interpreter } = simplifyInlineCode(effectiveCommand);
 
   const segments = splitCommandLine(displayCommand);
   const commandSegments = segments.filter(s => s.type === 'command');
-  const multiline = isMultiline(command);
-  const lineCount = multiline ? countLines(command) : 1;
+  const multiline = isMultiline(effectiveCommand);
+  const lineCount = multiline ? countLines(effectiveCommand) : 1;
 
   // Get explanations for all commands in the chain (skip keywords and duplicates)
   const seenCommands = new Set<string>();
@@ -374,7 +593,7 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
   });
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+    <div className={`rounded-lg border p-4 ${sshInfo ? 'border-cyan-800 bg-gray-900/90' : 'border-gray-800 bg-gray-900'}`}>
       {/* Header with timestamp and workspace */}
       <div className="mb-3 flex items-center gap-2">
         <span className="rounded bg-gray-800 px-2 py-1 font-mono text-xs text-gray-400">
@@ -383,6 +602,14 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
         <span className="rounded bg-blue-900/50 px-2 py-1 text-xs font-medium text-blue-300">
           {workspace}
         </span>
+        {sshInfo && (
+          <span
+            className="rounded bg-cyan-900/50 px-2 py-1 text-xs font-medium text-cyan-300 font-mono"
+            title={`Remote command via SSH`}
+          >
+            ssh {sshInfo.hostDisplay}
+          </span>
+        )}
         {multiline && !hasInlineCode && (
           <span
             className="rounded bg-green-900/50 px-2 py-1 text-xs font-medium text-green-300"
