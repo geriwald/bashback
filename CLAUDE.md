@@ -13,6 +13,7 @@ Claude Code → bashback-hook.sh → /tmp/bashback.log → Node.js server (fs.wa
 ```
 
 Three components:
+
 - **hook/**: Bash script that receives Claude Code hook JSON via stdin, extracts commands with `jq`, appends to log file
 - **server/**: Node.js backend (Express/Fastify) that watches `/tmp/bashback.log`, parses new lines, broadcasts via WebSocket
 - **client/**: React + TypeScript + Vite frontend with Tailwind CSS, displays commands with syntax highlighting and flag explanations
@@ -34,6 +35,7 @@ npm run dev:client    # Client on localhost:5173
 ## Log Format
 
 Commands are logged with workspace info:
+
 ```
 [2026-02-05 14:32:01] [bashback] CMD: grep -rn "useState" src/
 ```
@@ -47,3 +49,11 @@ Commands are logged with workspace info:
 ## Reference
 
 See [bashback-spec.md](bashback-spec.md) for complete specification including planned file structure, v1 features, and future evolutions.
+
+## Évolutions futures (hors v1)
+
+- Mode quiz : masquer la commande, montrer ce qu'elle fait, deviner la syntaxe
+- Stats : commandes les plus fréquentes, flags jamais vus
+- Filtres : par commande de base (grep, git, docker...)
+- Export : générer un markdown des commandes de la session
+- LLM local : explication enrichie via Ollama
