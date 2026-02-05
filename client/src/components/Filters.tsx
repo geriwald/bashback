@@ -34,8 +34,6 @@ export function Filters({
   const hasCommands = baseCommands.length > 1;
   const hasOperators = operators.length > 0;
 
-  if (!hasWorkspaces && !hasCommands && !hasOperators) return null;
-
   return (
     <div className="shrink-0 border-r border-gray-800 bg-gray-900/50 p-3 overflow-y-auto max-w-xs flex flex-col">
       {/* Command count */}
