@@ -9,10 +9,29 @@ function getBaseCommand(command: string): string {
   return command.trim().split(/\s+/)[0];
 }
 
+function extractOperators(command: string): string[] {
+  const operators: string[] = [];
+  // Chain operators
+  if (/&&/.test(command)) operators.push('&&');
+  if (/\|\|/.test(command)) operators.push('||');
+  if (/(?<!\|)\|(?!\|)/.test(command)) operators.push('|');
+  if (/;/.test(command)) operators.push(';');
+  // Redirections
+  if (/>>/.test(command)) operators.push('>>');
+  else if (/>(?!&)/.test(command)) operators.push('>');
+  if (/<</.test(command)) operators.push('<<');
+  else if (/<(?!<)/.test(command)) operators.push('<');
+  if (/2>&1/.test(command)) operators.push('2>&1');
+  // Substitution
+  if (/\$\(/.test(command)) operators.push('$()');
+  return operators;
+}
+
 export default function App() {
   const { commands, connected, clearCommands } = useWebSocket();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [selectedCommand, setSelectedCommand] = useState<string | null>(null);
+  const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
 
   const workspaces = useMemo(() => {
     const unique = new Set(commands.map((cmd) => cmd.workspace));
@@ -31,6 +50,19 @@ export default function App() {
       .map(([cmd]) => cmd);
   }, [commands]);
 
+  const operators = useMemo(() => {
+    const counts = new Map<string, number>();
+    commands.forEach((cmd) => {
+      extractOperators(cmd.command).forEach((op) => {
+        counts.set(op, (counts.get(op) || 0) + 1);
+      });
+    });
+    // Sort by frequency
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([op]) => op);
+  }, [commands]);
+
   const filteredCommands = useMemo(() => {
     let filtered = commands;
     if (selectedWorkspace) {
@@ -39,9 +71,12 @@ export default function App() {
     if (selectedCommand) {
       filtered = filtered.filter((cmd) => getBaseCommand(cmd.command) === selectedCommand);
     }
+    if (selectedOperator) {
+      filtered = filtered.filter((cmd) => extractOperators(cmd.command).includes(selectedOperator));
+    }
     // Newest first
     return [...filtered].reverse();
-  }, [commands, selectedWorkspace, selectedCommand]);
+  }, [commands, selectedWorkspace, selectedCommand, selectedOperator]);
 
   return (
     <DescriptionsProvider>
@@ -50,7 +85,7 @@ export default function App() {
           connected={connected}
           filteredCount={filteredCommands.length}
           totalCount={commands.length}
-          hasFilters={!!(selectedWorkspace || selectedCommand)}
+          hasFilters={!!(selectedWorkspace || selectedCommand || selectedOperator)}
           onClear={clearCommands}
         />
 
@@ -62,6 +97,9 @@ export default function App() {
           baseCommands={baseCommands}
           selectedCommand={selectedCommand}
           onSelectCommand={setSelectedCommand}
+          operators={operators}
+          selectedOperator={selectedOperator}
+          onSelectOperator={setSelectedOperator}
         />
 
         <main className="flex-1 overflow-hidden">

@@ -5,7 +5,23 @@ interface FiltersProps {
   baseCommands: string[];
   selectedCommand: string | null;
   onSelectCommand: (command: string | null) => void;
+  operators: string[];
+  selectedOperator: string | null;
+  onSelectOperator: (operator: string | null) => void;
 }
+
+const OPERATOR_LABELS: Record<string, string> = {
+  '&&': '&& (AND)',
+  '||': '|| (OR)',
+  '|': '| (PIPE)',
+  ';': '; (SEQ)',
+  '>': '> (WRITE)',
+  '>>': '>> (APPEND)',
+  '<': '< (READ)',
+  '<<': '<< (HEREDOC)',
+  '2>&1': '2>&1',
+  '$()': '$() (SUBST)',
+};
 
 export function Filters({
   workspaces,
@@ -14,11 +30,15 @@ export function Filters({
   baseCommands,
   selectedCommand,
   onSelectCommand,
+  operators,
+  selectedOperator,
+  onSelectOperator,
 }: FiltersProps) {
   const hasWorkspaces = workspaces.length > 1;
   const hasCommands = baseCommands.length > 1;
+  const hasOperators = operators.length > 0;
 
-  if (!hasWorkspaces && !hasCommands) return null;
+  if (!hasWorkspaces && !hasCommands && !hasOperators) return null;
 
   return (
     <div className="shrink-0 border-r border-gray-800 bg-gray-900/50 p-3 overflow-y-auto max-w-xs">
@@ -54,7 +74,7 @@ export function Filters({
       )}
 
       {hasCommands && (
-        <div>
+        <div className="mb-3">
           <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-2">Commands</span>
           <div className="flex flex-wrap gap-1.5">
             <button
@@ -78,6 +98,37 @@ export function Filters({
                 }`}
               >
                 {cmd}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {hasOperators && (
+        <div>
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-2">Operators</span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => onSelectOperator(null)}
+              className={`rounded px-2 py-1 text-xs transition ${
+                selectedOperator === null
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              All
+            </button>
+            {operators.map((op) => (
+              <button
+                key={op}
+                onClick={() => onSelectOperator(op)}
+                className={`rounded px-2 py-1 text-xs font-mono transition ${
+                  selectedOperator === op
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                {OPERATOR_LABELS[op] || op}
               </button>
             ))}
           </div>
