@@ -30,6 +30,16 @@ async function main() {
     res.json({ status: 'ok' });
   });
 
+  app.post('/api/clear-log', async (_req, res) => {
+    try {
+      await writeFile('/tmp/bashback.log', '', 'utf-8');
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error clearing log:', error);
+      res.status(500).json({ error: 'Failed to clear log' });
+    }
+  });
+
   // Get command description from --help
   app.get('/api/explain-command', async (req, res) => {
     const { command } = req.query;

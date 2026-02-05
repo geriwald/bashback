@@ -14,6 +14,7 @@ const OPERATOR_TOOLTIPS: Record<string, string> = {
   '||': 'OR: run next command only if previous fails',
   '|': 'PIPE: send output of previous command to next',
   ';': 'SEQUENCE: run next command regardless of previous result',
+  '\\': 'LINE CONTINUATION: continue command on next line',
   '<<': 'HEREDOC: read input until delimiter (e.g., <<EOF...EOF)',
   '>>': 'APPEND: append output to file',
   '>': 'REDIRECT: write output to file (overwrite)',
@@ -25,6 +26,15 @@ const OPERATOR_TOOLTIPS: Record<string, string> = {
   '$(': 'COMMAND SUBSTITUTION: execute command and use its output',
   ')': 'END: closing bracket',
 };
+
+// Shell keywords that should not be treated as commands
+const SHELL_KEYWORDS = new Set([
+  'if', 'then', 'else', 'elif', 'fi',
+  'for', 'do', 'done',
+  'while', 'until',
+  'case', 'esac',
+  'function',
+]);
 
 function getOperatorTooltip(op: string): string {
   const trimmed = op.trim();
@@ -42,26 +52,55 @@ async function fetchCommandDescription(command: string): Promise<string | null> 
   }
 }
 
-// Split command line on operators while keeping operators
-function splitCommandLine(line: string): { type: 'command' | 'operator'; value: string }[] {
-  const result: { type: 'command' | 'operator'; value: string }[] = [];
-  const regex = /(\s*(?:&&|\|\||[|;])\s*)/g;
+// Split command line on operators while keeping operators (handles multiline)
+function splitCommandLine(line: string): { type: 'command' | 'operator' | 'keyword'; value: string }[] {
+  const result: { type: 'command' | 'operator' | 'keyword'; value: string }[] = [];
+  // Match operators: &&, ||, |, ;, and line continuation \n (with optional \)
+  const regex = /(\s*(?:&&|\|\||[|;])\s*|\\\n|\n)/g;
   let lastIndex = 0;
   let match;
 
   while ((match = regex.exec(line)) !== null) {
     if (match.index > lastIndex) {
-      result.push({ type: 'command', value: line.slice(lastIndex, match.index) });
+      const segment = line.slice(lastIndex, match.index);
+      result.push(...classifySegment(segment));
     }
-    result.push({ type: 'operator', value: match[1] });
+    // For line continuation or newline
+    if (match[1] === '\\\n') {
+      result.push({ type: 'operator', value: ' \\\n' });
+    } else if (match[1] === '\n') {
+      result.push({ type: 'operator', value: '\n' });
+    } else {
+      result.push({ type: 'operator', value: match[1] });
+    }
     lastIndex = regex.lastIndex;
   }
 
   if (lastIndex < line.length) {
-    result.push({ type: 'command', value: line.slice(lastIndex) });
+    const segment = line.slice(lastIndex);
+    result.push(...classifySegment(segment));
   }
 
   return result;
+}
+
+// Classify a segment as command or keyword
+function classifySegment(segment: string): { type: 'command' | 'operator' | 'keyword'; value: string }[] {
+  const trimmed = segment.trim();
+  if (!trimmed) return [];
+
+  // Skip lines that start with > (likely heredoc content or prompt output)
+  if (trimmed.startsWith('>') && !trimmed.startsWith('>>')) {
+    return [{ type: 'command', value: segment }];
+  }
+
+  // Check if it's just a shell keyword
+  const firstWord = trimmed.split(/\s+/)[0];
+  if (SHELL_KEYWORDS.has(firstWord)) {
+    return [{ type: 'keyword', value: segment }];
+  }
+
+  return [{ type: 'command', value: segment }];
 }
 
 // Redirection and substitution patterns for highlighting
@@ -152,8 +191,18 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
   const multiline = isMultiline(command);
   const lineCount = multiline ? countLines(command) : 1;
 
-  // Get explanations for all commands in the chain
-  const explanations = commandSegments.map(s => explainCommand(s.value));
+  // Get explanations for all commands in the chain (skip keywords and duplicates)
+  const seenCommands = new Set<string>();
+  const explanations = commandSegments
+    .map(s => explainCommand(s.value))
+    .filter(exp => {
+      // Skip shell keywords
+      if (SHELL_KEYWORDS.has(exp.baseCommand)) return false;
+      // Skip duplicates
+      if (seenCommands.has(exp.baseCommand)) return false;
+      seenCommands.add(exp.baseCommand);
+      return true;
+    });
 
   // Build set of known flags for highlighting
   const knownFlags = new Set<string>();
@@ -189,7 +238,14 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
           {segments.map((segment, i) => {
             if (segment.type === 'operator') {
               return (
-                <span key={i} className="text-yellow-500 font-bold" title={getOperatorTooltip(segment.value)}>
+                <span key={i} className="text-yellow-500 font-bold" title={getOperatorTooltip(segment.value.trim())}>
+                  {segment.value}
+                </span>
+              );
+            }
+            if (segment.type === 'keyword') {
+              return (
+                <span key={i} className="text-pink-400 font-semibold">
                   {segment.value}
                 </span>
               );

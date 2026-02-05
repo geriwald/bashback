@@ -85,7 +85,12 @@ export function useWebSocket() {
     };
   }, [connect, loadHistory]);
 
-  const clearCommands = useCallback(() => {
+  const clearCommands = useCallback(async () => {
+    try {
+      await fetch(`${API_URL}/api/clear-log`, { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to clear log:', error);
+    }
     setCommands([]);
   }, []);
 

@@ -16,6 +16,8 @@ function extractOperators(command: string): string[] {
   if (/\|\|/.test(command)) operators.push('||');
   if (/(?<!\|)\|(?!\|)/.test(command)) operators.push('|');
   if (/;/.test(command)) operators.push(';');
+  // Line continuation
+  if (/\\\n/.test(command)) operators.push('\\');
   // Redirections
   if (/>>/.test(command)) operators.push('>>');
   else if (/>(?!&)/.test(command)) operators.push('>');

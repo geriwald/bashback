@@ -60,7 +60,7 @@ export const COMMAND_DESCRIPTIONS: Record<string, string> = {
   scp: 'Secure remote copy',
   rsync: 'File synchronization',
   gh: 'GitHub CLI',
-  jq: 'JSON processing',
+  jq: 'commandline JSON processor',
   htop: 'Interactive process monitor',
   top: 'Process monitor',
   df: 'Disk space available',
@@ -145,6 +145,7 @@ const FLAGS: Record<string, Record<string, string>> = {
     '-f': 'Force operation',
     '-u': 'Set upstream',
     '-p': 'Push all branches',
+    '-n': 'Limit number of commits to show',
     '--amend': 'Modify last commit',
     '--force': 'Force push',
     '--hard': 'Hard reset (loses changes)',
@@ -363,7 +364,7 @@ export function explainCommand(command: string): CommandExplanation {
   };
 
   // Commands where -N means -n N (numeric shorthand)
-  const numericShorthandCommands = ['tail', 'head'];
+  const numericShorthandCommands = ['tail', 'head', 'git'];
 
   let i = 1;
   while (i < parts.length) {
