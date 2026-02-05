@@ -1,4 +1,5 @@
 import { SaveButton } from './SaveButton';
+import { HookInstallButton } from './HookInstallButton';
 
 interface HeaderProps {
   connected: boolean;
@@ -30,6 +31,7 @@ export function Header({ connected, onClearLog }: HeaderProps) {
 
       {/* Right: controls */}
       <div className="flex items-center gap-4">
+        <HookInstallButton />
         <SaveButton />
         <button
           onClick={onClearLog}

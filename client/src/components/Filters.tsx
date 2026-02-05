@@ -30,8 +30,8 @@ export function Filters({
   totalCount,
   hasFilters,
 }: FiltersProps) {
-  const hasWorkspaces = workspaces.length > 1;
-  const hasCommands = baseCommands.length > 1;
+  const hasWorkspaces = workspaces.length > 0;
+  const hasCommands = baseCommands.length > 0;
   const hasOperators = operators.length > 0;
 
   return (
