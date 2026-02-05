@@ -322,6 +322,10 @@ const FLAGS: Record<string, Record<string, string>> = {
     '-m': 'Count characters',
     '-L': 'Longest line length',
   },
+  jq: {
+    '-r': 'read each line as string instead of JSON',
+  },
+
 };
 
 export interface FlagExplanation {

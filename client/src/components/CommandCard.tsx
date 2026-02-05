@@ -62,7 +62,7 @@ function simplifyInlineCode(command: string): { simplified: string; hasInlineCod
   if (match) {
     const [, prefix, interpreter, quote, , suffix] = match;
     return {
-      simplified: `${prefix}${quote}...${interpreter} code...${quote}${suffix}`,
+      simplified: `${prefix}${quote}[inline:${interpreter}]${quote}${suffix}`,
       hasInlineCode: true,
       interpreter
     };
@@ -75,7 +75,7 @@ function simplifyInlineCode(command: string): { simplified: string; hasInlineCod
   if (multiMatch) {
     const interpreter = multiMatch[2];
     return {
-      simplified: `${multiMatch[1]}...${interpreter} code...'${multiMatch[3]}`,
+      simplified: `${multiMatch[1]}[inline:${interpreter}]'${multiMatch[3]}`,
       hasInlineCode: true,
       interpreter
     };
@@ -109,7 +109,12 @@ function extractHeredoc(command: string): { before: string; heredocContent: stri
   const before = command.slice(0, heredocStart);
   const heredocEnd = endMatch.index! + delimiter.length + 1; // +1 for the \n before delimiter
   const heredocContent = command.slice(heredocStart, heredocEnd);
-  const after = command.slice(heredocEnd);
+  let after = command.slice(heredocEnd);
+
+  // If after starts with ) or )", add newline for proper display
+  if (after && /^[)"]/.test(after)) {
+    after = '\n' + after;
+  }
 
   return { before, heredocContent, after: after || null };
 }
@@ -183,6 +188,17 @@ function classifySegment(segment: string): { type: 'command' | 'operator' | 'key
 // Redirection and substitution patterns for highlighting
 const SPECIAL_PATTERN = /^(2>&1|>&2|&>|2>>|2>|>>|>|<<|<|\$\(|\))$/;
 
+// Check if a part is an inline code placeholder marker [inline:interpreter]
+const INLINE_CODE_MARKER = /^\[inline:(\w+)\]$/;
+
+function isInlineCodePlaceholder(part: string): { match: boolean; interpreter: string | null } {
+  const m = part.match(INLINE_CODE_MARKER);
+  if (m) {
+    return { match: true, interpreter: m[1] };
+  }
+  return { match: false, interpreter: null };
+}
+
 // Render a single command with custom highlighting
 function renderCommand(cmd: string, knownFlags: Set<string>) {
   // Split on whitespace AND keep redirections/substitutions as separate tokens
@@ -234,10 +250,37 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
       continue;
     }
 
-    // Quoted strings
+    // Quoted strings - check for inline code placeholder
     if (part.startsWith('"') || part.startsWith("'")) {
+      const quote = part[0];
+      const content = part.slice(1, part.endsWith(quote) ? -1 : undefined);
+      const endQuote = part.endsWith(quote) ? quote : '';
+      const placeholder = isInlineCodePlaceholder(content);
+
+      if (placeholder.match) {
+        // Display as "    interpreter code    " in gray italic
+        const displayText = `    ${placeholder.interpreter} code    `;
+        elements.push(
+          <span key={key}>
+            <span className="text-green-400">{quote}</span>
+            <span className="text-gray-500 italic">{displayText}</span>
+            <span className="text-green-400">{endQuote}</span>
+          </span>
+        );
+      } else {
+        elements.push(
+          <span key={key} className="text-green-400">{part}</span>
+        );
+      }
+      continue;
+    }
+
+    // Check for inline code marker without quotes
+    const placeholder = isInlineCodePlaceholder(part);
+    if (placeholder.match) {
+      const displayText = `    ${placeholder.interpreter} code    `;
       elements.push(
-        <span key={key} className="text-green-400">{part}</span>
+        <span key={key} className="text-gray-500 italic">{displayText}</span>
       );
       continue;
     }
