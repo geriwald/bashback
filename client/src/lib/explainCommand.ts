@@ -339,11 +339,15 @@ export interface FlagExplanation {
 
 export interface CommandExplanation {
   baseCommand: string;
+  subCommand: string | null;
   description: string;
   flags: FlagExplanation[];
   unknownFlags: string[];
   args: string[];
 }
+
+// Commands that have subcommands (git add, docker run, npm install, etc.)
+const COMMANDS_WITH_SUBCOMMANDS = new Set(['git', 'docker', 'npm', 'yarn', 'pnpm', 'kubectl', 'cargo', 'go']);
 
 export function explainCommand(command: string): CommandExplanation {
   const parts = command.trim().split(/\s+/);
@@ -358,6 +362,19 @@ export function explainCommand(command: string): CommandExplanation {
   const flags: FlagExplanation[] = [];
   const unknownFlags: string[] = [];
   const args: string[] = [];
+
+  // Extract subcommand for git, docker, npm, etc.
+  let subCommand: string | null = null;
+  if (COMMANDS_WITH_SUBCOMMANDS.has(baseCommand)) {
+    // Find first non-flag argument after base command
+    for (let j = commandStartIndex + 1; j < parts.length; j++) {
+      const p = parts[j];
+      if (!p.startsWith('-')) {
+        subCommand = p;
+        break;
+      }
+    }
+  }
 
   const commandFlags = FLAGS[baseCommand] || {};
   const description = COMMAND_DESCRIPTIONS[baseCommand] || '';
@@ -459,5 +476,5 @@ export function explainCommand(command: string): CommandExplanation {
     i++;
   }
 
-  return { baseCommand, description, flags, unknownFlags, args };
+  return { baseCommand, subCommand, description, flags, unknownFlags, args };
 }

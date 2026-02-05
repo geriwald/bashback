@@ -5,6 +5,7 @@ import { useDescriptions } from '../context/DescriptionsContext';
 interface FlagExplainerProps {
   flags: FlagExplanation[];
   baseCommand: string;
+  subCommand?: string | null;
 }
 
 interface FetchResult {
@@ -13,9 +14,12 @@ interface FetchResult {
   longForm: string | null;
 }
 
-async function fetchFlagExplanation(command: string, flag: string): Promise<FetchResult | null> {
+async function fetchFlagExplanation(command: string, flag: string, subCommand?: string | null): Promise<FetchResult | null> {
   try {
     const params = new URLSearchParams({ command, flag });
+    if (subCommand) {
+      params.set('subCommand', subCommand);
+    }
     const res = await fetch(`http://localhost:3001/api/explain-flag?${params}`);
     const data = await res.json();
     if (data.explanation) {
@@ -34,18 +38,19 @@ async function fetchFlagExplanation(command: string, flag: string): Promise<Fetc
 interface FlagItemProps {
   flag: FlagExplanation;
   baseCommand: string;
+  subCommand?: string | null;
   customDesc: string;
   customLongForm: string | null;
   onSave: (desc: string, longForm?: string) => void;
 }
 
-function FlagItem({ flag, baseCommand, customDesc, customLongForm, onSave }: FlagItemProps) {
+function FlagItem({ flag, baseCommand, subCommand, customDesc, customLongForm, onSave }: FlagItemProps) {
   // Flag is "known" if it has a real description (not "Unknown flag")
   const isKnown = !flag.isUnknown || customDesc !== 'Unknown flag';
 
   // Lookup for EditableText - returns explanation and also saves longForm as side effect
   const lookupForEdit = async (): Promise<string | null> => {
-    const result = await fetchFlagExplanation(baseCommand, flag.flag);
+    const result = await fetchFlagExplanation(baseCommand, flag.flag, subCommand);
     if (result?.explanation) {
       if (result.longForm) {
         onSave(customDesc, result.longForm);
@@ -82,7 +87,7 @@ function FlagItem({ flag, baseCommand, customDesc, customLongForm, onSave }: Fla
   );
 }
 
-export function FlagExplainer({ flags, baseCommand }: FlagExplainerProps) {
+export function FlagExplainer({ flags, baseCommand, subCommand }: FlagExplainerProps) {
   const { getFlagDescription, setFlagDescription, getFlagLongForm, setFlagLongForm } = useDescriptions();
 
   if (flags.length === 0) return null;
@@ -97,6 +102,7 @@ export function FlagExplainer({ flags, baseCommand }: FlagExplainerProps) {
             key={index}
             flag={flag}
             baseCommand={baseCommand}
+            subCommand={subCommand}
             customDesc={customDesc}
             customLongForm={customLongForm}
             onSave={(desc, longForm) => {

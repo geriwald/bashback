@@ -461,7 +461,7 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
                 placeholder="Add description..."
               />
               {exp.flags.length > 0 && (
-                <FlagExplainer flags={exp.flags} baseCommand={exp.baseCommand} />
+                <FlagExplainer flags={exp.flags} baseCommand={exp.baseCommand} subCommand={exp.subCommand} />
               )}
             </div>
           );

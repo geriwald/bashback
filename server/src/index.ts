@@ -108,7 +108,7 @@ async function main() {
 
   // Parse --help to find flag explanation
   app.get('/api/explain-flag', async (req, res) => {
-    const { command, flag } = req.query;
+    const { command, flag, subCommand } = req.query;
     if (!command || !flag || typeof command !== 'string' || typeof flag !== 'string') {
       return res.status(400).json({ error: 'Missing command or flag parameter' });
     }
@@ -117,19 +117,27 @@ async function main() {
     if (!/^[a-zA-Z0-9_-]+$/.test(command)) {
       return res.status(400).json({ error: 'Invalid command name' });
     }
+    if (subCommand && typeof subCommand === 'string' && !/^[a-zA-Z0-9_-]+$/.test(subCommand)) {
+      return res.status(400).json({ error: 'Invalid subcommand name' });
+    }
+
+    // Build the command to get help (e.g., "git add" instead of just "git")
+    const fullCommand = subCommand && typeof subCommand === 'string'
+      ? `${command} ${subCommand}`
+      : command;
 
     try {
       // Try --help first, then -h, then man
       let helpOutput = '';
       try {
-        const { stdout, stderr } = await execAsync(`${command} --help 2>&1`, { timeout: 5000 });
+        const { stdout, stderr } = await execAsync(`${fullCommand} --help 2>&1`, { timeout: 5000 });
         helpOutput = stdout || stderr;
       } catch {
         try {
-          const { stdout, stderr } = await execAsync(`${command} -h 2>&1`, { timeout: 5000 });
+          const { stdout, stderr } = await execAsync(`${fullCommand} -h 2>&1`, { timeout: 5000 });
           helpOutput = stdout || stderr;
         } catch {
-          // Try man page as last resort
+          // Try man page as last resort (only for base command)
           try {
             const { stdout } = await execAsync(`man ${command} 2>/dev/null | col -b`, { timeout: 5000 });
             helpOutput = stdout;
