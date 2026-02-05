@@ -15,3 +15,6 @@ client/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local customizations (not shared)
+customDescriptions.local.json

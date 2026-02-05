@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const STORAGE_KEY = 'bashback:descriptions';
+const API_URL = 'http://localhost:3001';
 
 interface CustomDescriptions {
   commands: Record<string, string>;
@@ -8,7 +9,9 @@ interface CustomDescriptions {
   longForms: Record<string, Record<string, string>>; // command -> flag -> longForm
 }
 
-function loadDescriptions(): CustomDescriptions {
+const emptyDescriptions: CustomDescriptions = { commands: {}, flags: {}, longForms: {} };
+
+function loadFromLocalStorage(): CustomDescriptions {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
@@ -17,22 +20,36 @@ function loadDescriptions(): CustomDescriptions {
   } catch {
     // ignore
   }
-  return { commands: {}, flags: {}, longForms: {} };
+  return emptyDescriptions;
 }
 
-function saveDescriptions(descriptions: CustomDescriptions) {
+function saveToLocalStorage(descriptions: CustomDescriptions) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(descriptions));
 }
 
 export function useCustomDescriptions() {
-  const [descriptions, setDescriptions] = useState<CustomDescriptions>(loadDescriptions);
+  // Descriptions saved to JSON file (persisted, shared)
+  const [savedDescriptions, setSavedDescriptions] = useState<CustomDescriptions>(emptyDescriptions);
+  // Current session edits in localStorage
+  const [localDescriptions, setLocalDescriptions] = useState<CustomDescriptions>(loadFromLocalStorage);
 
+  // Load saved descriptions from JSON file on mount
   useEffect(() => {
-    saveDescriptions(descriptions);
-  }, [descriptions]);
+    fetch(`${API_URL}/api/custom-descriptions`)
+      .then((res) => res.json())
+      .then((data) => setSavedDescriptions(data))
+      .catch(() => {
+        // ignore
+      });
+  }, []);
+
+  // Persist local edits to localStorage
+  useEffect(() => {
+    saveToLocalStorage(localDescriptions);
+  }, [localDescriptions]);
 
   const setCommandDescription = useCallback((command: string, description: string) => {
-    setDescriptions((prev) => ({
+    setLocalDescriptions((prev) => ({
       ...prev,
       commands: { ...prev.commands, [command]: description },
     }));
@@ -40,7 +57,7 @@ export function useCustomDescriptions() {
 
   const setFlagDescription = useCallback(
     (command: string, flag: string, description: string) => {
-      setDescriptions((prev) => ({
+      setLocalDescriptions((prev) => ({
         ...prev,
         flags: {
           ...prev.flags,
@@ -51,23 +68,28 @@ export function useCustomDescriptions() {
     []
   );
 
+  // Get description: local > saved > default
   const getCommandDescription = useCallback(
     (command: string, defaultDesc: string) => {
-      return descriptions.commands[command] ?? defaultDesc;
+      return localDescriptions.commands[command]
+        ?? savedDescriptions.commands[command]
+        ?? defaultDesc;
     },
-    [descriptions.commands]
+    [localDescriptions.commands, savedDescriptions.commands]
   );
 
   const getFlagDescription = useCallback(
     (command: string, flag: string, defaultDesc: string) => {
-      return descriptions.flags[command]?.[flag] ?? defaultDesc;
+      return localDescriptions.flags[command]?.[flag]
+        ?? savedDescriptions.flags[command]?.[flag]
+        ?? defaultDesc;
     },
-    [descriptions.flags]
+    [localDescriptions.flags, savedDescriptions.flags]
   );
 
   const setFlagLongForm = useCallback(
     (command: string, flag: string, longForm: string) => {
-      setDescriptions((prev) => ({
+      setLocalDescriptions((prev) => ({
         ...prev,
         longForms: {
           ...prev.longForms,
@@ -80,43 +102,51 @@ export function useCustomDescriptions() {
 
   const getFlagLongForm = useCallback(
     (command: string, flag: string) => {
-      return descriptions.longForms?.[command]?.[flag] ?? null;
+      return localDescriptions.longForms?.[command]?.[flag]
+        ?? savedDescriptions.longForms?.[command]?.[flag]
+        ?? null;
     },
-    [descriptions.longForms]
+    [localDescriptions.longForms, savedDescriptions.longForms]
   );
 
+  // Count only local (unsaved) descriptions
   const hasCustomDescriptions = useCallback(() => {
-    return Object.keys(descriptions.commands).length > 0 || Object.keys(descriptions.flags).length > 0;
-  }, [descriptions]);
+    return Object.keys(localDescriptions.commands).length > 0 || Object.keys(localDescriptions.flags).length > 0;
+  }, [localDescriptions]);
 
-  const saveToCode = useCallback(async () => {
+  const saveDescriptions = useCallback(async () => {
     if (!hasCustomDescriptions()) return false;
     try {
-      const res = await fetch('http://localhost:3001/api/save-descriptions', {
+      const res = await fetch(`${API_URL}/api/save-descriptions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(descriptions),
+        body: JSON.stringify(localDescriptions),
       });
       const data = await res.json();
       if (data.success) {
-        // Clear localStorage after saving to code
-        setDescriptions({ commands: {}, flags: {}, longForms: {} });
+        // Merge local into saved and clear local
+        setSavedDescriptions((prev) => ({
+          commands: { ...prev.commands, ...localDescriptions.commands },
+          flags: { ...prev.flags, ...localDescriptions.flags },
+          longForms: { ...prev.longForms, ...localDescriptions.longForms },
+        }));
+        setLocalDescriptions(emptyDescriptions);
         return true;
       }
       return false;
     } catch {
       return false;
     }
-  }, [descriptions, hasCustomDescriptions]);
+  }, [localDescriptions, hasCustomDescriptions]);
 
   const getCustomCount = useCallback(() => {
-    const cmdCount = Object.keys(descriptions.commands).length;
-    const flagCount = Object.values(descriptions.flags).reduce((sum, f) => sum + Object.keys(f).length, 0);
+    const cmdCount = Object.keys(localDescriptions.commands).length;
+    const flagCount = Object.values(localDescriptions.flags).reduce((sum, f) => sum + Object.keys(f).length, 0);
     return cmdCount + flagCount;
-  }, [descriptions]);
+  }, [localDescriptions]);
 
   const clearDescriptions = useCallback(() => {
-    setDescriptions({ commands: {}, flags: {}, longForms: {} });
+    setLocalDescriptions(emptyDescriptions);
   }, []);
 
   return {
@@ -127,7 +157,7 @@ export function useCustomDescriptions() {
     setFlagLongForm,
     getFlagLongForm,
     hasCustomDescriptions,
-    saveToCode,
+    saveToCode: saveDescriptions, // renamed but keeping old name for compatibility
     getCustomCount,
     clearDescriptions,
   };

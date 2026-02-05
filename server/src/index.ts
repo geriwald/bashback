@@ -226,11 +226,26 @@ async function main() {
     return null;
   }
 
-  // Save custom descriptions to explainCommand.ts
+  // Custom descriptions file path (gitignored, local to each user)
+  const customDescriptionsPath = join(__dirname, '../../customDescriptions.local.json');
+
+  // Get custom descriptions from local JSON file
+  app.get('/api/custom-descriptions', async (_req, res) => {
+    try {
+      const content = await readFile(customDescriptionsPath, 'utf-8');
+      res.json(JSON.parse(content));
+    } catch {
+      // File doesn't exist yet, return empty
+      res.json({ commands: {}, flags: {}, longForms: {} });
+    }
+  });
+
+  // Save custom descriptions to local JSON file (gitignored)
   app.post('/api/save-descriptions', async (req, res) => {
-    const { commands, flags } = req.body as {
+    const { commands, flags, longForms } = req.body as {
       commands: Record<string, string>;
       flags: Record<string, Record<string, string>>;
+      longForms?: Record<string, Record<string, string>>;
     };
 
     if (!commands && !flags) {
@@ -238,60 +253,31 @@ async function main() {
     }
 
     try {
-      const filePath = join(__dirname, '../../client/src/lib/explainCommand.ts');
-      let content = await readFile(filePath, 'utf-8');
-
-      // Update COMMAND_DESCRIPTIONS
-      if (commands && Object.keys(commands).length > 0) {
-        for (const [cmd, desc] of Object.entries(commands)) {
-          const escapedDesc = desc.replace(/'/g, "\\'");
-          const regex = new RegExp(`(${cmd}:\\s*')[^']*(')`);
-          if (content.match(regex)) {
-            // Update existing
-            content = content.replace(regex, `$1${escapedDesc}$2`);
-          } else {
-            // Add new entry before the closing brace of COMMAND_DESCRIPTIONS
-            const insertPoint = content.indexOf('};');
-            if (insertPoint !== -1) {
-              const newEntry = `  ${cmd}: '${escapedDesc}',\n`;
-              content = content.slice(0, insertPoint) + newEntry + content.slice(insertPoint);
-            }
-          }
-        }
+      // Load existing custom descriptions
+      let existing = { commands: {}, flags: {}, longForms: {} };
+      try {
+        const content = await readFile(customDescriptionsPath, 'utf-8');
+        existing = JSON.parse(content);
+      } catch {
+        // File doesn't exist yet
       }
 
-      // Update FLAGS
-      if (flags && Object.keys(flags).length > 0) {
+      // Merge with new descriptions (new ones override existing)
+      const merged = {
+        commands: { ...existing.commands, ...commands },
+        flags: { ...existing.flags },
+        longForms: { ...existing.longForms, ...(longForms || {}) },
+      };
+
+      // Deep merge flags
+      if (flags) {
         for (const [cmd, cmdFlags] of Object.entries(flags)) {
-          for (const [flag, desc] of Object.entries(cmdFlags)) {
-            const escapedDesc = desc.replace(/'/g, "\\'");
-            // Try to find existing flag in the command's flags
-            const flagRegex = new RegExp(`(${cmd}:\\s*\\{[^}]*'${flag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}':\\s*')[^']*(')`);
-            if (content.match(flagRegex)) {
-              content = content.replace(flagRegex, `$1${escapedDesc}$2`);
-            } else {
-              // Find the command's flags block and add the new flag
-              const cmdBlockRegex = new RegExp(`(${cmd}:\\s*\\{)([^}]*)(\\})`);
-              const match = content.match(cmdBlockRegex);
-              if (match) {
-                const newFlag = `\n    '${flag}': '${escapedDesc}',`;
-                content = content.replace(cmdBlockRegex, `$1$2${newFlag}\n  $3`);
-              } else {
-                // Command doesn't exist in FLAGS, add it
-                const flagsEndRegex = /(\n};)\s*\n\nexport interface/;
-                const flagsMatch = content.match(flagsEndRegex);
-                if (flagsMatch) {
-                  const newBlock = `  ${cmd}: {\n    '${flag}': '${escapedDesc}',\n  },\n`;
-                  content = content.replace(flagsEndRegex, `\n${newBlock}$1\n\nexport interface`);
-                }
-              }
-            }
-          }
+          merged.flags[cmd] = { ...(merged.flags[cmd] || {}), ...cmdFlags };
         }
       }
 
-      await writeFile(filePath, content, 'utf-8');
-      res.json({ success: true, message: 'Descriptions saved to explainCommand.ts' });
+      await writeFile(customDescriptionsPath, JSON.stringify(merged, null, 2), 'utf-8');
+      res.json({ success: true, message: 'Descriptions saved to customDescriptions.local.json' });
     } catch (error) {
       console.error('Error saving descriptions:', error);
       res.status(500).json({ error: 'Failed to save descriptions' });

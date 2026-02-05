@@ -30,7 +30,7 @@ export function SaveButton() {
         onClick={handleSave}
         disabled={saving}
         className="rounded bg-green-700 px-3 py-1.5 text-sm text-white transition hover:bg-green-600 disabled:opacity-50"
-        title="Save custom descriptions to explainCommand.ts"
+        title="Save custom descriptions to local JSON file"
       >
         {saving ? 'Saving...' : message ? message : `Save descriptions (${count})`}
       </button>
