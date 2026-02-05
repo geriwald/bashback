@@ -135,22 +135,22 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
   return elements;
 }
 
-// Detect if command appears truncated (multiline heredoc, unbalanced substitution)
-function isTruncated(cmd: string): boolean {
-  // Has heredoc but line ends (content would be on next lines)
-  if (/<<['"]?\w+['"]?\s*$/.test(cmd) || /<<['"]?\w+['"]?\)/.test(cmd)) return true;
-  // Unbalanced $( - more opens than closes
-  const opens = (cmd.match(/\$\(/g) || []).length;
-  const closes = (cmd.match(/\)/g) || []).length;
-  if (opens > closes) return true;
-  return false;
+// Check if command is multiline
+function isMultiline(cmd: string): boolean {
+  return cmd.includes('\n');
+}
+
+// Count lines in a command
+function countLines(cmd: string): number {
+  return cmd.split('\n').length;
 }
 
 export function CommandCard({ timestamp, workspace, command }: CommandCardProps) {
   const { getCommandDescription, setCommandDescription } = useDescriptions();
   const segments = splitCommandLine(command);
   const commandSegments = segments.filter(s => s.type === 'command');
-  const truncated = isTruncated(command);
+  const multiline = isMultiline(command);
+  const lineCount = multiline ? countLines(command) : 1;
 
   // Get explanations for all commands in the chain
   const explanations = commandSegments.map(s => explainCommand(s.value));
@@ -173,12 +173,12 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
         <span className="rounded bg-blue-900/50 px-2 py-1 text-xs font-medium text-blue-300">
           {workspace}
         </span>
-        {truncated && (
+        {multiline && (
           <span
-            className="rounded bg-orange-900/50 px-2 py-1 text-xs font-medium text-orange-300"
-            title="Command appears truncated (multiline heredoc or unbalanced substitution)"
+            className="rounded bg-green-900/50 px-2 py-1 text-xs font-medium text-green-300"
+            title={`Multiline command (${lineCount} lines)`}
           >
-            multiline...
+            {lineCount} lines
           </span>
         )}
       </div>
