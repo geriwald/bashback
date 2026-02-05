@@ -9,6 +9,26 @@ interface CommandCardProps {
   command: string;
 }
 
+const OPERATOR_TOOLTIPS: Record<string, string> = {
+  '&&': 'AND: run next command only if previous succeeds',
+  '||': 'OR: run next command only if previous fails',
+  '|': 'PIPE: send output of previous command to next',
+  ';': 'SEQUENCE: run next command regardless of previous result',
+  '<<': 'HEREDOC: inline multi-line input',
+  '>>': 'APPEND: append output to file',
+  '>': 'REDIRECT: write output to file (overwrite)',
+  '<': 'INPUT: read input from file',
+  '2>&1': 'STDERR to STDOUT: merge error output with standard output',
+  '2>': 'STDERR: redirect error output',
+  '&>': 'ALL OUTPUT: redirect both stdout and stderr',
+  '>&2': 'TO STDERR: send output to error stream',
+};
+
+function getOperatorTooltip(op: string): string {
+  const trimmed = op.trim();
+  return OPERATOR_TOOLTIPS[trimmed] || trimmed;
+}
+
 async function fetchCommandDescription(command: string): Promise<string | null> {
   try {
     const params = new URLSearchParams({ command });
@@ -42,19 +62,34 @@ function splitCommandLine(line: string): { type: 'command' | 'operator'; value: 
   return result;
 }
 
+// Redirection patterns for highlighting
+const REDIRECTION_PATTERN = /^(2>&1|>&2|&>|2>>|2>|>>|>|<<|<)$/;
+
 // Render a single command with custom highlighting
 function renderCommand(cmd: string, knownFlags: Set<string>) {
-  const parts = cmd.trim().split(/(\s+)/);
+  // Split on whitespace AND keep redirections as separate tokens
+  const parts = cmd.trim().split(/(\s+|(?:2>&1|>&2|&>|2>>|2>|>>|>|<<|<))/);
   const elements: JSX.Element[] = [];
   let isFirstWord = true;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
+    if (!part) continue;
     const key = `part-${i}`;
 
     // Whitespace
     if (/^\s+$/.test(part)) {
       elements.push(<span key={key}>{part}</span>);
+      continue;
+    }
+
+    // Redirections
+    if (REDIRECTION_PATTERN.test(part)) {
+      elements.push(
+        <span key={key} className="text-yellow-500 font-bold" title={getOperatorTooltip(part)}>
+          {part}
+        </span>
+      );
       continue;
     }
 
@@ -133,7 +168,7 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
           {segments.map((segment, i) => {
             if (segment.type === 'operator') {
               return (
-                <span key={i} className="text-yellow-500 font-bold">
+                <span key={i} className="text-yellow-500 font-bold" title={getOperatorTooltip(segment.value)}>
                   {segment.value}
                 </span>
               );
@@ -157,7 +192,7 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
           return (
             <div key={i} className="flex flex-wrap items-center gap-2">
               {prevOperator && (
-                <span className="text-yellow-500 text-xs font-mono">{prevOperator}</span>
+                <span className="text-yellow-500 text-xs font-mono" title={getOperatorTooltip(prevOperator)}>{prevOperator}</span>
               )}
               <span className="rounded bg-purple-900/50 px-2 py-1 text-xs font-medium text-purple-300 font-mono">
                 {exp.baseCommand}
