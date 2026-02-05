@@ -4,6 +4,7 @@ import { CommandList } from './components/CommandList';
 import { Filters } from './components/Filters';
 import { Header } from './components/Header';
 import { DescriptionsProvider } from './context/DescriptionsContext';
+import { PrivacyProvider } from './context/PrivacyContext';
 
 function getBaseCommand(command: string): string {
   const parts = command.trim().split(/\s+/);
@@ -110,6 +111,7 @@ export default function App() {
   }, [commands, selectedWorkspace, selectedCommand, selectedOperator]);
 
   return (
+    <PrivacyProvider>
     <DescriptionsProvider>
       <div className="flex h-screen flex-col">
         <Header
@@ -139,5 +141,6 @@ export default function App() {
       </div>
     </div>
     </DescriptionsProvider>
+    </PrivacyProvider>
   );
 }

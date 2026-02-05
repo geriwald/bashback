@@ -2,6 +2,7 @@ import { explainCommand, COMMAND_DESCRIPTIONS, shellTokenize, isQuotedToken } fr
 import { FlagExplainer } from './FlagExplainer';
 import { EditableText } from './EditableText';
 import { useDescriptions } from '../context/DescriptionsContext';
+import { usePrivacy } from '../context/PrivacyContext';
 
 interface CommandCardProps {
   timestamp: string;
@@ -437,7 +438,7 @@ function renderTokenize(cmd: string): string[] {
 }
 
 // Render a single command with custom highlighting
-function renderCommand(cmd: string, knownFlags: Set<string>) {
+function renderCommand(cmd: string, knownFlags: Set<string>, redact: (s: string) => string = s => s) {
   // Quote-aware split on whitespace and redirections/substitutions
   const parts = renderTokenize(cmd.trim());
   const elements: JSX.Element[] = [];
@@ -473,7 +474,7 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
         <span key={key} title="Environment variable">
           <span className="text-blue-400">{varName}</span>
           <span className="text-yellow-500">=</span>
-          <span className="text-green-400">{varValue}</span>
+          <span className="text-green-400">{redact(varValue)}</span>
         </span>
       );
       continue;
@@ -521,7 +522,7 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
         );
       } else {
         elements.push(
-          <span key={key} className="text-green-400">{part}</span>
+          <span key={key} className="text-green-400">{redact(part)}</span>
         );
       }
       continue;
@@ -539,7 +540,7 @@ function renderCommand(cmd: string, knownFlags: Set<string>) {
 
     // Regular arguments
     elements.push(
-      <span key={key} className="text-gray-300">{part}</span>
+      <span key={key} className="text-gray-300">{redact(part)}</span>
     );
   }
 
@@ -558,6 +559,7 @@ function countLines(cmd: string): number {
 
 export function CommandCard({ timestamp, workspace, command }: CommandCardProps) {
   const { getCommandDescription, setCommandDescription } = useDescriptions();
+  const { redact, privacyMode } = usePrivacy();
 
   // Detect SSH commands: extract remote command and display it as if local
   const sshInfo = parseSSHCommand(command);
@@ -566,7 +568,15 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
   // Simplify inline code commands (node -e, python -c, etc.)
   const { simplified: displayCommand, hasInlineCode, interpreter } = simplifyInlineCode(effectiveCommand);
 
-  const segments = splitCommandLine(displayCommand);
+  let segments = splitCommandLine(displayCommand);
+  // For long SSH commands, add line breaks after ; operators for readability
+  if (sshInfo && effectiveCommand.length > 80) {
+    segments = segments.flatMap(s =>
+      s.type === 'operator' && s.value.trim() === ';'
+        ? [{ ...s, value: ' ;' }, { type: 'operator' as const, value: '\n' }]
+        : [s]
+    );
+  }
   const commandSegments = segments.filter(s => s.type === 'command');
   const multiline = isMultiline(effectiveCommand);
   const lineCount = multiline ? countLines(effectiveCommand) : 1;
@@ -600,14 +610,14 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
           {timestamp}
         </span>
         <span className="rounded bg-blue-900/50 px-2 py-1 text-xs font-medium text-blue-300">
-          {workspace}
+          {redact(workspace)}
         </span>
         {sshInfo && (
           <span
             className="rounded bg-cyan-900/50 px-2 py-1 text-xs font-medium text-cyan-300 font-mono"
             title={`Remote command via SSH`}
           >
-            ssh {sshInfo.hostDisplay}
+            ssh {privacyMode ? '\u2022\u2022\u2022' : sshInfo.hostDisplay}
           </span>
         )}
         {multiline && !hasInlineCode && (
@@ -662,7 +672,7 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
             }
             return (
               <span key={i}>
-                {renderCommand(segment.value, knownFlags)}
+                {renderCommand(segment.value, knownFlags, redact)}
               </span>
             );
           })}

@@ -1,5 +1,6 @@
 import { SaveButton } from './SaveButton';
 import { HookInstallButton } from './HookInstallButton';
+import { usePrivacy } from '../context/PrivacyContext';
 
 interface HeaderProps {
   connected: boolean;
@@ -7,6 +8,8 @@ interface HeaderProps {
 }
 
 export function Header({ connected, onClearLog }: HeaderProps) {
+  const { privacyMode, togglePrivacy } = usePrivacy();
+
   return (
     <header className="relative flex items-center justify-between border-b border-gray-800 bg-gray-900 px-6 py-4">
       {/* Left: connection status */}
@@ -31,6 +34,17 @@ export function Header({ connected, onClearLog }: HeaderProps) {
 
       {/* Right: controls */}
       <div className="flex items-center gap-4">
+        <button
+          onClick={togglePrivacy}
+          className={`rounded px-3 py-1.5 text-sm transition ${
+            privacyMode
+              ? 'bg-amber-900/50 text-amber-300 hover:bg-amber-800/50'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+          }`}
+          title={privacyMode ? 'Privacy mode ON - sensitive info masked' : 'Privacy mode OFF - click to mask sensitive info'}
+        >
+          {privacyMode ? 'Privacy ON' : 'Privacy'}
+        </button>
         <HookInstallButton />
         <SaveButton />
         <button
