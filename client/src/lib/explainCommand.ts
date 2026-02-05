@@ -1,209 +1,325 @@
+// Command descriptions in English
+export const COMMAND_DESCRIPTIONS: Record<string, string> = {
+  grep: 'Search in files',
+  find: 'Find files/directories',
+  git: 'Version control',
+  ls: 'List directory contents',
+  rm: 'Remove files/directories',
+  cp: 'Copy files/directories',
+  mv: 'Move or rename',
+  cat: 'Display file content',
+  docker: 'Container management',
+  npm: 'Node.js package manager',
+  curl: 'HTTP data transfer',
+  chmod: 'Change permissions',
+  chown: 'Change owner',
+  tar: 'Archive and compress',
+  ssh: 'Secure remote connection',
+  sed: 'Stream editor (search/replace)',
+  awk: 'Column text processing',
+  ps: 'List processes',
+  kill: 'Terminate a process',
+  cd: 'Change directory',
+  pwd: 'Print working directory',
+  echo: 'Display text',
+  mkdir: 'Create directory',
+  touch: 'Create empty file',
+  head: 'Display file beginning',
+  tail: 'Display file end',
+  wc: 'Count lines/words/chars',
+  sort: 'Sort lines',
+  uniq: 'Remove duplicates',
+  diff: 'Compare two files',
+  xargs: 'Execute command on each input',
+  which: 'Locate a command',
+  whoami: 'Display current user',
+  date: 'Display date/time',
+  tree: 'Display directory tree',
+  less: 'View file page by page',
+  more: 'View file page by page',
+  nano: 'Simple text editor',
+  vim: 'Advanced text editor',
+  code: 'Open VS Code',
+  node: 'Run JavaScript',
+  python: 'Run Python',
+  python3: 'Run Python 3',
+  pip: 'Python package manager',
+  pip3: 'Python 3 package manager',
+  brew: 'macOS package manager',
+  apt: 'Debian/Ubuntu package manager',
+  yum: 'RHEL/CentOS package manager',
+  pacman: 'Arch package manager',
+  systemctl: 'Systemd service management',
+  journalctl: 'View systemd logs',
+  ping: 'Test network connectivity',
+  traceroute: 'Trace network path',
+  netstat: 'Network statistics',
+  ifconfig: 'Network configuration',
+  ip: 'Advanced network management',
+  wget: 'Download files',
+  scp: 'Secure remote copy',
+  rsync: 'File synchronization',
+  gh: 'GitHub CLI',
+  jq: 'JSON processing',
+  htop: 'Interactive process monitor',
+  top: 'Process monitor',
+  df: 'Disk space available',
+  du: 'File/directory size',
+  free: 'Memory available',
+  uname: 'System information',
+  env: 'Environment variables',
+  export: 'Set environment variable',
+  source: 'Execute script in current shell',
+  alias: 'Create command shortcut',
+  history: 'Command history',
+  clear: 'Clear terminal',
+  exit: 'Exit shell',
+  man: 'Command manual',
+  sleep: 'Pause for N seconds',
+  tee: 'Redirect to file and stdout',
+  cut: 'Extract columns',
+  tr: 'Replace characters',
+  basename: 'Extract filename',
+  dirname: 'Extract parent path',
+  realpath: 'Absolute path',
+  ln: 'Create link',
+  stat: 'File information',
+  file: 'File type',
+  zip: 'ZIP compression',
+  unzip: 'ZIP decompression',
+  gzip: 'GZIP compression',
+  gunzip: 'GZIP decompression',
+};
+
 const FLAGS: Record<string, Record<string, string>> = {
   grep: {
-    '-r': 'Récursif dans les sous-dossiers',
-    '-R': 'Récursif (suit les liens symboliques)',
-    '-n': 'Affiche les numéros de ligne',
-    '-i': 'Insensible à la casse',
-    '-l': 'Affiche seulement les noms de fichiers',
-    '-L': 'Affiche les fichiers sans correspondance',
-    '-v': 'Inverse la recherche (exclut)',
-    '-E': 'Regex étendue (ERE)',
-    '-P': 'Regex Perl (PCRE)',
-    '-c': 'Compte les occurrences',
-    '-w': 'Mot entier uniquement',
-    '-x': 'Ligne entière uniquement',
-    '-A': 'Affiche N lignes après',
-    '-B': 'Affiche N lignes avant',
-    '-C': 'Affiche N lignes avant et après',
-    '-q': 'Mode silencieux',
-    '-s': 'Supprime les erreurs',
-    '-h': 'Cache les noms de fichiers',
-    '-H': 'Affiche les noms de fichiers',
-    '--include': 'Inclut seulement ces fichiers',
-    '--exclude': 'Exclut ces fichiers',
-    '--exclude-dir': 'Exclut ces dossiers',
+    '-r': 'Recursive into subdirectories',
+    '-R': 'Recursive (follows symlinks)',
+    '-n': 'Show line numbers',
+    '-i': 'Case insensitive',
+    '-l': 'Show only filenames',
+    '-L': 'Show files without matches',
+    '-v': 'Invert match (exclude)',
+    '-E': 'Extended regex (ERE)',
+    '-P': 'Perl regex (PCRE)',
+    '-c': 'Count matches',
+    '-w': 'Whole word only',
+    '-x': 'Whole line only',
+    '-A': 'Show N lines after',
+    '-B': 'Show N lines before',
+    '-C': 'Show N lines before and after',
+    '-q': 'Quiet mode',
+    '-s': 'Suppress errors',
+    '-h': 'Hide filenames',
+    '-H': 'Show filenames',
+    '--include': 'Include only these files',
+    '--exclude': 'Exclude these files',
+    '--exclude-dir': 'Exclude these directories',
   },
   find: {
-    '-name': 'Cherche par nom (sensible à la casse)',
-    '-iname': 'Cherche par nom (insensible à la casse)',
-    '-type': 'Type: f=fichier, d=dossier, l=lien',
-    '-mtime': 'Modifié il y a N jours',
-    '-mmin': 'Modifié il y a N minutes',
-    '-atime': 'Accédé il y a N jours',
-    '-ctime': 'Métadonnées changées il y a N jours',
-    '-size': 'Taille (+N plus grand, -N plus petit)',
-    '-exec': 'Exécute une commande sur chaque résultat',
-    '-delete': 'Supprime les fichiers trouvés',
-    '-print': 'Affiche les résultats',
-    '-maxdepth': 'Profondeur maximale de recherche',
-    '-mindepth': 'Profondeur minimale de recherche',
-    '-empty': 'Fichiers/dossiers vides',
-    '-newer': 'Plus récent que le fichier donné',
-    '-perm': 'Permissions spécifiques',
-    '-user': 'Appartient à cet utilisateur',
-    '-group': 'Appartient à ce groupe',
+    '-name': 'Search by name (case sensitive)',
+    '-iname': 'Search by name (case insensitive)',
+    '-type': 'Type: f=file, d=directory, l=link',
+    '-mtime': 'Modified N days ago',
+    '-mmin': 'Modified N minutes ago',
+    '-atime': 'Accessed N days ago',
+    '-ctime': 'Metadata changed N days ago',
+    '-size': 'Size (+N larger, -N smaller)',
+    '-exec': 'Execute command on each result',
+    '-delete': 'Delete found files',
+    '-print': 'Print results',
+    '-maxdepth': 'Maximum search depth',
+    '-mindepth': 'Minimum search depth',
+    '-empty': 'Empty files/directories',
+    '-newer': 'Newer than given file',
+    '-perm': 'Specific permissions',
+    '-user': 'Owned by this user',
+    '-group': 'Owned by this group',
   },
   git: {
-    '-m': 'Message de commit',
-    '-a': 'Ajoute tous les fichiers modifiés',
-    '-b': 'Crée une nouvelle branche',
-    '-d': 'Supprime une branche',
-    '-D': 'Force la suppression de branche',
-    '-f': 'Force l\'opération',
-    '-u': 'Configure le upstream',
-    '-p': 'Pousse toutes les branches',
-    '--amend': 'Modifie le dernier commit',
-    '--force': 'Force le push',
-    '--hard': 'Reset dur (perd les changements)',
-    '--soft': 'Reset doux (garde les changements)',
-    '--mixed': 'Reset mixte (défaut)',
-    '--no-verify': 'Ignore les hooks',
-    '--oneline': 'Affichage compact',
-    '--graph': 'Affiche le graphe des branches',
-    '--all': 'Toutes les branches',
-    '--stat': 'Statistiques des changements',
-    '--patch': 'Mode interactif par hunks',
-    '-v': 'Mode verbeux',
+    '-m': 'Commit message',
+    '-a': 'Add all modified files',
+    '-b': 'Create new branch',
+    '-d': 'Delete branch',
+    '-D': 'Force delete branch',
+    '-f': 'Force operation',
+    '-u': 'Set upstream',
+    '-p': 'Push all branches',
+    '--amend': 'Modify last commit',
+    '--force': 'Force push',
+    '--hard': 'Hard reset (loses changes)',
+    '--soft': 'Soft reset (keeps changes)',
+    '--mixed': 'Mixed reset (default)',
+    '--no-verify': 'Skip hooks',
+    '--oneline': 'Compact display',
+    '--graph': 'Show branch graph',
+    '--all': 'All branches',
+    '--stat': 'Change statistics',
+    '--patch': 'Interactive hunk mode',
+    '-v': 'Verbose mode',
   },
   ls: {
-    '-l': 'Format long (détails)',
-    '-a': 'Affiche les fichiers cachés',
-    '-h': 'Tailles lisibles (Ko, Mo)',
-    '-R': 'Récursif',
-    '-t': 'Trie par date de modification',
-    '-S': 'Trie par taille',
-    '-r': 'Ordre inverse',
-    '-1': 'Un fichier par ligne',
-    '-d': 'Dossiers seulement (pas leur contenu)',
-    '--color': 'Colorise la sortie',
+    '-l': 'Long format (details)',
+    '-a': 'Show hidden files',
+    '-h': 'Human readable sizes',
+    '-R': 'Recursive',
+    '-t': 'Sort by modification time',
+    '-S': 'Sort by size',
+    '-r': 'Reverse order',
+    '-1': 'One file per line',
+    '-d': 'Directories only (not contents)',
+    '--color': 'Colorize output',
   },
   rm: {
-    '-r': 'Récursif (supprime les dossiers)',
-    '-f': 'Force (pas de confirmation)',
-    '-i': 'Demande confirmation',
-    '-v': 'Mode verbeux',
-    '-d': 'Supprime les dossiers vides',
+    '-r': 'Recursive (removes directories)',
+    '-f': 'Force (no confirmation)',
+    '-i': 'Prompt for confirmation',
+    '-v': 'Verbose mode',
+    '-d': 'Remove empty directories',
   },
   cp: {
-    '-r': 'Récursif (copie les dossiers)',
-    '-R': 'Récursif (identique à -r)',
-    '-i': 'Demande confirmation avant écrasement',
-    '-n': 'Ne pas écraser',
-    '-u': 'Copie seulement si plus récent',
-    '-v': 'Mode verbeux',
-    '-p': 'Préserve les attributs',
-    '-a': 'Archive (préserve tout)',
+    '-r': 'Recursive (copies directories)',
+    '-R': 'Recursive (same as -r)',
+    '-i': 'Prompt before overwrite',
+    '-n': 'Do not overwrite',
+    '-u': 'Copy only if newer',
+    '-v': 'Verbose mode',
+    '-p': 'Preserve attributes',
+    '-a': 'Archive (preserve all)',
   },
   mv: {
-    '-i': 'Demande confirmation avant écrasement',
-    '-n': 'Ne pas écraser',
-    '-u': 'Déplace seulement si plus récent',
-    '-v': 'Mode verbeux',
-    '-f': 'Force (pas de confirmation)',
+    '-i': 'Prompt before overwrite',
+    '-n': 'Do not overwrite',
+    '-u': 'Move only if newer',
+    '-v': 'Verbose mode',
+    '-f': 'Force (no confirmation)',
   },
   cat: {
-    '-n': 'Numérote les lignes',
-    '-b': 'Numérote les lignes non vides',
-    '-s': 'Réduit les lignes vides consécutives',
-    '-A': 'Affiche tous les caractères',
-    '-E': 'Affiche $ en fin de ligne',
-    '-T': 'Affiche les tabulations comme ^I',
+    '-n': 'Number lines',
+    '-b': 'Number non-empty lines',
+    '-s': 'Squeeze blank lines',
+    '-A': 'Show all characters',
+    '-E': 'Show $ at end of lines',
+    '-T': 'Show tabs as ^I',
   },
   docker: {
-    '-d': 'Mode détaché (arrière-plan)',
-    '-it': 'Mode interactif avec terminal',
-    '-p': 'Mapping de ports',
-    '-v': 'Monte un volume',
-    '-e': 'Variable d\'environnement',
-    '--rm': 'Supprime le conteneur à l\'arrêt',
-    '--name': 'Nom du conteneur',
-    '-f': 'Fichier Dockerfile ou force',
-    '-t': 'Tag de l\'image',
-    '--build': 'Reconstruit les images',
-    '--no-cache': 'Sans cache',
-    '-q': 'Mode silencieux',
+    '-d': 'Detached mode (background)',
+    '-it': 'Interactive with terminal',
+    '-p': 'Port mapping',
+    '-v': 'Mount volume',
+    '-e': 'Environment variable',
+    '--rm': 'Remove container on exit',
+    '--name': 'Container name',
+    '-f': 'Dockerfile or force',
+    '-t': 'Image tag',
+    '--build': 'Rebuild images',
+    '--no-cache': 'No cache',
+    '-q': 'Quiet mode',
   },
   npm: {
-    '-g': 'Installation globale',
-    '-D': 'Dépendance de développement',
-    '--save-dev': 'Dépendance de développement',
-    '--save': 'Dépendance de production',
+    '-g': 'Global install',
+    '-D': 'Dev dependency',
+    '--save-dev': 'Dev dependency',
+    '--save': 'Production dependency',
     '-f': 'Force',
-    '--force': 'Force l\'installation',
-    '--legacy-peer-deps': 'Ignore les conflits de peer deps',
+    '--force': 'Force install',
+    '--legacy-peer-deps': 'Ignore peer dep conflicts',
   },
   curl: {
-    '-X': 'Méthode HTTP (GET, POST, etc.)',
-    '-H': 'Header personnalisé',
-    '-d': 'Données POST',
-    '-o': 'Fichier de sortie',
-    '-O': 'Garde le nom du fichier',
-    '-L': 'Suit les redirections',
-    '-s': 'Mode silencieux',
-    '-v': 'Mode verbeux',
-    '-k': 'Ignore les erreurs SSL',
-    '-u': 'Authentification user:password',
-    '-i': 'Inclut les headers dans la sortie',
-    '--data-raw': 'Données brutes',
-    '-F': 'Données multipart/form-data',
+    '-X': 'HTTP method (GET, POST, etc.)',
+    '-H': 'Custom header',
+    '-d': 'POST data',
+    '-o': 'Output file',
+    '-O': 'Keep remote filename',
+    '-L': 'Follow redirects',
+    '-s': 'Silent mode',
+    '-v': 'Verbose mode',
+    '-k': 'Ignore SSL errors',
+    '-u': 'Authentication user:password',
+    '-i': 'Include headers in output',
+    '--data-raw': 'Raw data',
+    '-F': 'Multipart form data',
   },
   chmod: {
-    '-R': 'Récursif',
-    '-v': 'Mode verbeux',
-    '+x': 'Ajoute permission d\'exécution',
-    '-x': 'Retire permission d\'exécution',
-    '+r': 'Ajoute permission de lecture',
-    '+w': 'Ajoute permission d\'écriture',
+    '-R': 'Recursive',
+    '-v': 'Verbose mode',
+    '+x': 'Add execute permission',
+    '-x': 'Remove execute permission',
+    '+r': 'Add read permission',
+    '+w': 'Add write permission',
   },
   chown: {
-    '-R': 'Récursif',
-    '-v': 'Mode verbeux',
-    '--reference': 'Copie les permissions d\'un autre fichier',
+    '-R': 'Recursive',
+    '-v': 'Verbose mode',
+    '--reference': 'Copy permissions from another file',
   },
   tar: {
-    '-c': 'Crée une archive',
-    '-x': 'Extrait une archive',
-    '-v': 'Mode verbeux',
-    '-f': 'Fichier d\'archive',
-    '-z': 'Compression gzip',
-    '-j': 'Compression bzip2',
-    '-J': 'Compression xz',
-    '-t': 'Liste le contenu',
-    '-C': 'Change de répertoire',
+    '-c': 'Create archive',
+    '-x': 'Extract archive',
+    '-v': 'Verbose mode',
+    '-f': 'Archive file',
+    '-z': 'Gzip compression',
+    '-j': 'Bzip2 compression',
+    '-J': 'Xz compression',
+    '-t': 'List contents',
+    '-C': 'Change directory',
   },
   ssh: {
     '-p': 'Port',
-    '-i': 'Fichier de clé privée',
-    '-v': 'Mode verbeux',
-    '-L': 'Tunnel local',
-    '-R': 'Tunnel distant',
-    '-N': 'Pas de commande (tunnel seulement)',
-    '-f': 'Passe en arrière-plan',
+    '-i': 'Private key file',
+    '-v': 'Verbose mode',
+    '-L': 'Local tunnel',
+    '-R': 'Remote tunnel',
+    '-N': 'No command (tunnel only)',
+    '-f': 'Run in background',
   },
   sed: {
-    '-i': 'Modifie le fichier en place',
-    '-e': 'Expression à exécuter',
-    '-n': 'Supprime l\'affichage par défaut',
-    '-r': 'Regex étendue',
-    '-E': 'Regex étendue (alias)',
+    '-i': 'Edit file in place',
+    '-e': 'Expression to execute',
+    '-n': 'Suppress default output',
+    '-r': 'Extended regex',
+    '-E': 'Extended regex (alias)',
   },
   awk: {
-    '-F': 'Séparateur de champs',
-    '-v': 'Définit une variable',
-    '-f': 'Fichier de script AWK',
+    '-F': 'Field separator',
+    '-v': 'Define variable',
+    '-f': 'AWK script file',
   },
   ps: {
-    '-a': 'Tous les processus',
-    '-u': 'Format utilisateur',
-    '-x': 'Inclut les processus sans terminal',
-    '-e': 'Tous les processus',
-    '-f': 'Format complet',
-    '--forest': 'Arborescence des processus',
+    '-a': 'All processes',
+    '-u': 'User format',
+    '-x': 'Include processes without terminal',
+    '-e': 'All processes',
+    '-f': 'Full format',
+    '--forest': 'Process tree',
   },
   kill: {
     '-9': 'SIGKILL (force)',
-    '-15': 'SIGTERM (défaut, propre)',
-    '-HUP': 'SIGHUP (recharge config)',
+    '-15': 'SIGTERM (default, clean)',
+    '-HUP': 'SIGHUP (reload config)',
+  },
+  tail: {
+    '-n': 'Number of lines',
+    '-f': 'Follow (live updates)',
+    '-F': 'Follow with retry',
+    '-c': 'Number of bytes',
+    '-q': 'Quiet (no headers)',
+    '-v': 'Verbose (show headers)',
+    '--pid': 'Stop when PID dies',
+    '-s': 'Sleep interval for -f',
+  },
+  head: {
+    '-n': 'Number of lines',
+    '-c': 'Number of bytes',
+    '-q': 'Quiet (no headers)',
+    '-v': 'Verbose (show headers)',
+  },
+  wc: {
+    '-l': 'Count lines',
+    '-w': 'Count words',
+    '-c': 'Count bytes',
+    '-m': 'Count characters',
+    '-L': 'Longest line length',
   },
 };
 
@@ -211,11 +327,14 @@ export interface FlagExplanation {
   flag: string;
   value?: string;
   explanation: string;
+  isUnknown: boolean;
 }
 
 export interface CommandExplanation {
   baseCommand: string;
+  description: string;
   flags: FlagExplanation[];
+  unknownFlags: string[];
   args: string[];
 }
 
@@ -223,9 +342,28 @@ export function explainCommand(command: string): CommandExplanation {
   const parts = command.trim().split(/\s+/);
   const baseCommand = parts[0];
   const flags: FlagExplanation[] = [];
+  const unknownFlags: string[] = [];
   const args: string[] = [];
 
   const commandFlags = FLAGS[baseCommand] || {};
+  const description = COMMAND_DESCRIPTIONS[baseCommand] || '';
+
+  const addFlag = (flag: string, value?: string) => {
+    const explanation = commandFlags[flag];
+    const isUnknown = !explanation;
+    if (isUnknown) {
+      unknownFlags.push(flag);
+    }
+    flags.push({
+      flag,
+      value,
+      explanation: explanation || 'Unknown flag',
+      isUnknown,
+    });
+  };
+
+  // Commands where -N means -n N (numeric shorthand)
+  const numericShorthandCommands = ['tail', 'head'];
 
   let i = 1;
   while (i < parts.length) {
@@ -237,11 +375,15 @@ export function explainCommand(command: string): CommandExplanation {
       if (eqIndex !== -1) {
         const flag = part.slice(0, eqIndex);
         const value = part.slice(eqIndex + 1);
-        flags.push({
-          flag,
-          value,
-          explanation: commandFlags[flag] || 'Flag inconnu',
-        });
+        addFlag(flag, value);
+      }
+      // Check for numeric shorthand like -15 for tail/head (means -n 15)
+      else if (
+        numericShorthandCommands.includes(baseCommand) &&
+        /^-\d+$/.test(part)
+      ) {
+        const num = part.slice(1);
+        addFlag('-n', num);
       }
       // Check if next part is a value for this flag
       else if (
@@ -263,6 +405,10 @@ export function explainCommand(command: string): CommandExplanation {
           part === '-A' ||
           part === '-B' ||
           part === '-F' ||
+          part === '-n' ||
+          part === '-c' ||
+          part === '-s' ||
+          part === '--pid' ||
           part === '--name' ||
           part === '--include' ||
           part === '--exclude' ||
@@ -280,28 +426,17 @@ export function explainCommand(command: string): CommandExplanation {
           part === '-user' ||
           part === '-group')
       ) {
-        flags.push({
-          flag: part,
-          value: parts[i + 1],
-          explanation: commandFlags[part] || 'Flag inconnu',
-        });
+        addFlag(part, parts[i + 1]);
         i++;
       }
-      // Handle combined flags like -rn
-      else if (part.length > 2 && !part.startsWith('--')) {
+      // Handle combined flags like -rn, but NOT if all digits (already handled above)
+      else if (part.length > 2 && !part.startsWith('--') && !/^-\d+$/.test(part)) {
         const combinedFlags = part.slice(1).split('');
         for (const f of combinedFlags) {
-          const fullFlag = `-${f}`;
-          flags.push({
-            flag: fullFlag,
-            explanation: commandFlags[fullFlag] || 'Flag inconnu',
-          });
+          addFlag(`-${f}`);
         }
       } else {
-        flags.push({
-          flag: part,
-          explanation: commandFlags[part] || 'Flag inconnu',
-        });
+        addFlag(part);
       }
     } else {
       args.push(part);
@@ -310,5 +445,5 @@ export function explainCommand(command: string): CommandExplanation {
     i++;
   }
 
-  return { baseCommand, flags, args };
+  return { baseCommand, description, flags, unknownFlags, args };
 }
