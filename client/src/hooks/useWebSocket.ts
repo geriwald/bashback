@@ -1,0 +1,93 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+
+export interface Command {
+  id: string;
+  timestamp: string;
+  workspace: string;
+  command: string;
+}
+
+const WS_URL = 'ws://localhost:3001';
+const API_URL = 'http://localhost:3001';
+
+export function useWebSocket() {
+  const [commands, setCommands] = useState<Command[]>([]);
+  const [connected, setConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number>();
+
+  const connect = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+    const ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      setConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'command') {
+          setCommands((prev) => {
+            if (prev.some((cmd) => cmd.id === message.data.id)) {
+              return prev;
+            }
+            return [...prev, message.data];
+          });
+        }
+      } catch (error) {
+        console.error('Failed to parse message:', error);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      setConnected(false);
+      wsRef.current = null;
+
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        connect();
+      }, 2000);
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    wsRef.current = ws;
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/history`);
+      if (response.ok) {
+        const history = await response.json();
+        setCommands(history);
+      }
+    } catch (error) {
+      console.error('Failed to load history:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+    connect();
+
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connect, loadHistory]);
+
+  const clearCommands = useCallback(() => {
+    setCommands([]);
+  }, []);
+
+  return { commands, connected, clearCommands };
+}

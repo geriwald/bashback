@@ -33,9 +33,9 @@ npm run dev:client    # Client on localhost:5173
 
 ## Log Format
 
-Commands are logged as:
+Commands are logged with workspace info:
 ```
-[2026-02-05 14:32:01] CMD: grep -rn "useState" src/
+[2026-02-05 14:32:01] [bashback] CMD: grep -rn "useState" src/
 ```
 
 ## Key Files
