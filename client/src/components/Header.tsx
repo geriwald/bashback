@@ -12,16 +12,19 @@ export function Header({ connected, onClearLog }: HeaderProps) {
 
   return (
     <header className="relative flex items-center justify-between border-b border-gray-800 bg-gray-900 px-6 py-4">
-      {/* Left: connection status */}
-      <div className="flex items-center gap-2">
-        <span
-          className={`h-2 w-2 rounded-full ${
-            connected ? 'bg-green-500' : 'bg-red-500'
-          }`}
-        />
-        <span className="text-xs text-gray-400">
-          {connected ? 'Connected' : 'Disconnected'}
-        </span>
+      {/* Left: status indicators */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              connected ? 'bg-green-500' : 'bg-red-500'
+            }`}
+          />
+          <span className="text-xs text-gray-400">
+            {connected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+        <HookInstallButton />
       </div>
 
       {/* Center: title + tagline */}
@@ -45,7 +48,6 @@ export function Header({ connected, onClearLog }: HeaderProps) {
         >
           {privacyMode ? 'Privacy ON' : 'Privacy'}
         </button>
-        <HookInstallButton />
         <SaveButton />
         <button
           onClick={onClearLog}
