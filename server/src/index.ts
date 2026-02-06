@@ -444,8 +444,8 @@ async function main() {
       {
         id: 'configure-settings',
         title: 'Configure Claude settings',
-        description: 'Add the bashback hook to Claude Code PostToolUse settings',
-        command: `cat ${displayHome}/settings.json`,
+        description: 'Append bashback-hook.sh to hooks.PostToolUse[matcher=Bash] in settings.json (preserves existing hooks)',
+        command: `jq '.hooks.PostToolUse' ${displayHome}/settings.json`,
       },
       {
         id: 'verify',
@@ -489,6 +489,7 @@ async function main() {
         }
         case 'configure-settings': {
           const output: string[] = [];
+          const hookEntry = { type: 'command', command: '~/.claude/hooks/bashback-hook.sh' };
 
           // Read existing settings
           let settings: Record<string, unknown> = {};
@@ -499,8 +500,11 @@ async function main() {
             settingsExisted = true;
           } catch { /* File doesn't exist */ }
 
-          output.push(`$ cat ~/.claude/settings.json`);
-          output.push(settingsExisted ? '(file exists, reading current config)' : '(file not found, creating new config)');
+          output.push(`$ jq '.hooks.PostToolUse' ~/.claude/settings.json`);
+
+          if (!settingsExisted) {
+            output.push('null (file not found, creating new config)\n');
+          }
 
           // Check existing hooks
           if (!settings.hooks) settings.hooks = {};
@@ -512,36 +516,43 @@ async function main() {
 
           if (bashHook) {
             if (!bashHook.hooks) bashHook.hooks = [];
-            const existingHooks = bashHook.hooks.map(h => h.command).filter(Boolean);
-            output.push(`\nExisting Bash PostToolUse hooks (${existingHooks.length}):`);
-            existingHooks.forEach(h => output.push(`  - ${h}`));
 
+            // Show current state
+            output.push(JSON.stringify(postToolUse, null, 2));
+
+            // Already installed?
             const alreadyInstalled = bashHook.hooks.some(h => h.command?.includes('bashback-hook.sh'));
             if (alreadyInstalled) {
-              output.push(`\nbashback-hook.sh already configured, skipping.`);
+              output.push(`\nbashback-hook.sh already present in hooks.PostToolUse[matcher=Bash].hooks — nothing to do.`);
               res.json({ success: true, output: output.join('\n') });
               break;
             }
-            output.push(`\nAppending bashback-hook.sh to existing Bash hooks...`);
-            bashHook.hooks.push({ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' });
+
+            // Append to existing Bash hooks array
+            const beforeCount = bashHook.hooks.length;
+            bashHook.hooks.push(hookEntry);
+            output.push(`\n# Found ${beforeCount} existing hook(s) in PostToolUse[matcher=Bash].hooks`);
+            output.push(`# Appending bashback-hook.sh (hooks[${beforeCount}])`);
           } else {
-            const existingEvents = Object.keys(hooks).filter(k => (hooks[k] as unknown[]).length > 0);
-            if (existingEvents.length > 0) {
-              output.push(`\nExisting hook events: ${existingEvents.join(', ')}`);
+            // Show current state
+            if (postToolUse.length > 0) {
+              output.push(JSON.stringify(postToolUse, null, 2));
+              output.push(`\n# No entry with matcher=Bash found`);
+            } else {
+              output.push('[] (empty)\n');
             }
-            output.push(`\nNo Bash PostToolUse hooks found. Creating new entry...`);
-            postToolUse.push({
-              matcher: 'Bash',
-              hooks: [{ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' }],
-            });
+
+            // Create new Bash matcher entry
+            output.push(`# Creating new PostToolUse entry: { matcher: "Bash", hooks: [...] }`);
+            postToolUse.push({ matcher: 'Bash', hooks: [hookEntry] });
           }
 
           await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 
-          // Show the resulting PostToolUse section
+          // Show result
           const resultSettings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
           const resultHooks = JSON.stringify(resultSettings.hooks?.PostToolUse, null, 2);
-          output.push(`\n$ cat ~/.claude/settings.json | jq '.hooks.PostToolUse'`);
+          output.push(`\n$ jq '.hooks.PostToolUse' ~/.claude/settings.json`);
           output.push(resultHooks);
 
           res.json({ success: true, output: output.join('\n') });
@@ -587,9 +598,9 @@ async function main() {
           } catch { /* */ }
 
           const allGood = hookOk && execOk && settingsOk;
-          output.push(allGood
-            ? '\n--- All checks passed. Restart Claude Code to activate. ---'
-            : '\n--- Some checks failed. Review the steps above. ---');
+          if (!allGood) {
+            output.push('\n--- Some checks failed. Review the steps above. ---');
+          }
 
           res.json({ success: allGood, output: output.join('\n') });
           break;
@@ -620,14 +631,14 @@ async function main() {
   watchLogFile((command) => {
     if (!seenIds.has(command.id)) {
       seenIds.add(command.id);
-      console.log(`New command: ${command.command}`);
+      console.log(`bashback: new command: ${command.command}`);
       broadcast(command);
     }
   });
 
   server.listen(PORT, () => {
-    console.log(`bashback server running on http://localhost:${PORT}`);
-    console.log(`Watching /tmp/bashback.log for new commands...`);
+    console.log(`bashback: running on http://localhost:${PORT}`);
+    console.log(`bashback: watching /tmp/bashback.log`);
   });
 }
 
