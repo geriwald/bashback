@@ -1,0 +1,9 @@
+services:
+  bashback:
+    image: ghcr.io/geriwald/bashback:latest
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - /tmp/bashback.log:/tmp/bashback.log
+    restart: unless-stopped
