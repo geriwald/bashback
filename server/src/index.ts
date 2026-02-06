@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createWebSocketServer } from './websocket.js';
 import { watchLogFile, getHistory, ensureLogFile } from './watcher.js';
+import { checkSpelling } from './languagetool.js';
 
 const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -328,11 +329,13 @@ async function main() {
   const claudeSettingsPath = join(homeDir, '.claude', 'settings.json');
   const hookSourcePath = join(__dirname, '../../hook/bashback-hook.sh');
   const hookDestPath = join(claudeHooksDir, 'bashback-hook.sh');
+  const promptHookSourcePath = join(__dirname, '../../hook/bashback-prompt-hook.sh');
+  const promptHookDestPath = join(claudeHooksDir, 'bashback-prompt-hook.sh');
 
-  // Check if hook is installed
+  // Check if hooks are installed
   app.get('/api/hook-status', async (_req, res) => {
     try {
-      // Check if hook file exists
+      // Check if bash hook file exists
       let hookExists = false;
       try {
         await readFile(hookDestPath);
@@ -341,8 +344,18 @@ async function main() {
         hookExists = false;
       }
 
-      // Check if settings.json has the hook configured
+      // Check if prompt hook file exists
+      let promptHookExists = false;
+      try {
+        await readFile(promptHookDestPath);
+        promptHookExists = true;
+      } catch {
+        promptHookExists = false;
+      }
+
+      // Check if settings.json has the hooks configured
       let hookConfigured = false;
+      let promptHookConfigured = false;
       try {
         const settings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
         const postToolUse = settings.hooks?.PostToolUse || [];
@@ -350,14 +363,22 @@ async function main() {
           h.matcher === 'Bash' &&
           h.hooks?.some((hh: { command?: string }) => hh.command?.includes('bashback-hook.sh'))
         );
+        const userPromptSubmit = settings.hooks?.UserPromptSubmit || [];
+        promptHookConfigured = userPromptSubmit.some((h: { hooks?: { command?: string }[] }) =>
+          h.hooks?.some((hh: { command?: string }) => hh.command?.includes('bashback-prompt-hook.sh'))
+        );
       } catch {
         hookConfigured = false;
+        promptHookConfigured = false;
       }
 
       res.json({
         installed: hookExists && hookConfigured,
         hookExists,
         hookConfigured,
+        promptHookInstalled: promptHookExists && promptHookConfigured,
+        promptHookExists,
+        promptHookConfigured,
       });
     } catch (error) {
       console.error('Error checking hook status:', error);
@@ -365,12 +386,16 @@ async function main() {
     }
   });
 
-  // Install the Claude hook (legacy single-step endpoint)
+  // Install the Claude hooks (legacy single-step endpoint)
   app.post('/api/install-hook', async (_req, res) => {
     try {
       await execAsync(`mkdir -p "${claudeHooksDir}"`);
+
+      // Copy both hook scripts
       const hookContent = await readFile(hookSourcePath, 'utf-8');
       await writeFile(hookDestPath, hookContent, { mode: 0o755 });
+      const promptHookContent = await readFile(promptHookSourcePath, 'utf-8');
+      await writeFile(promptHookDestPath, promptHookContent, { mode: 0o755 });
 
       let settings: Record<string, unknown> = {};
       try {
@@ -378,10 +403,11 @@ async function main() {
       } catch { /* File doesn't exist */ }
 
       if (!settings.hooks) settings.hooks = {};
-      const hooks = settings.hooks as Record<string, unknown[]>;
-      if (!hooks.PostToolUse) hooks.PostToolUse = [];
+      const hooksConfig = settings.hooks as Record<string, unknown[]>;
 
-      const postToolUse = hooks.PostToolUse as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
+      // PostToolUse (Bash commands)
+      if (!hooksConfig.PostToolUse) hooksConfig.PostToolUse = [];
+      const postToolUse = hooksConfig.PostToolUse as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
       const bashHook = postToolUse.find(h => h.matcher === 'Bash');
 
       if (bashHook) {
@@ -397,6 +423,18 @@ async function main() {
         });
       }
 
+      // UserPromptSubmit (user prompts)
+      if (!hooksConfig.UserPromptSubmit) hooksConfig.UserPromptSubmit = [];
+      const userPromptSubmit = hooksConfig.UserPromptSubmit as { hooks?: { type?: string; command?: string }[] }[];
+      const existingPromptHook = userPromptSubmit.find(h =>
+        h.hooks?.some(hh => hh.command?.includes('bashback-prompt-hook.sh'))
+      );
+      if (!existingPromptHook) {
+        userPromptSubmit.push({
+          hooks: [{ type: 'command', command: '~/.claude/hooks/bashback-prompt-hook.sh' }],
+        });
+      }
+
       await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 
       const now = new Date();
@@ -404,10 +442,10 @@ async function main() {
       const sampleLine = `{"timestamp":"${timestamp}","workspace":"bashback","command":"echo 'Welcome to bashback! Hook installed successfully.'"}\n`;
       await appendFile('/tmp/bashback.log', sampleLine, 'utf-8');
 
-      res.json({ success: true, message: 'Hook installed! Restart Claude Code to activate.' });
+      res.json({ success: true, message: 'Hooks installed! Restart Claude Code to activate.' });
     } catch (error) {
-      console.error('Error installing hook:', error);
-      res.status(500).json({ error: 'Failed to install hook' });
+      console.error('Error installing hooks:', error);
+      res.status(500).json({ error: 'Failed to install hooks' });
     }
   });
 
@@ -437,21 +475,21 @@ async function main() {
       },
       {
         id: 'copy-hook',
-        title: 'Copy hook script',
-        description: 'Copy bashback-hook.sh to the Claude hooks directory',
-        command: `cp bashback-hook.sh ${displayHome}/hooks/ && chmod +x ${displayHome}/hooks/bashback-hook.sh`,
+        title: 'Copy hook scripts',
+        description: 'Copy bashback-hook.sh and bashback-prompt-hook.sh to the Claude hooks directory',
+        command: `cp bashback-*.sh ${displayHome}/hooks/ && chmod +x ${displayHome}/hooks/bashback-*.sh`,
       },
       {
         id: 'configure-settings',
         title: 'Configure Claude settings',
-        description: 'Append bashback-hook.sh to hooks.PostToolUse[matcher=Bash] in settings.json (preserves existing hooks)',
-        command: `jq '.hooks.PostToolUse' ${displayHome}/settings.json`,
+        description: 'Add hooks for PostToolUse (Bash commands) and UserPromptSubmit (user prompts) in settings.json',
+        command: `jq '.hooks' ${displayHome}/settings.json`,
       },
       {
         id: 'verify',
         title: 'Verify installation',
-        description: 'Check that the hook is properly installed and configured',
-        command: `test -x ${displayHome}/hooks/bashback-hook.sh && grep bashback ${displayHome}/settings.json`,
+        description: 'Check that both hooks are properly installed and configured',
+        command: `test -x ${displayHome}/hooks/bashback-hook.sh && test -x ${displayHome}/hooks/bashback-prompt-hook.sh && grep bashback ${displayHome}/settings.json`,
       },
     ];
     res.json(steps);
@@ -482,14 +520,16 @@ async function main() {
         case 'copy-hook': {
           const hookContent = await readFile(hookSourcePath, 'utf-8');
           await writeFile(hookDestPath, hookContent, { mode: 0o755 });
-          const { stdout: lsOut } = await execAsync(`ls -la "${hookDestPath}"`, { timeout: 5000 });
-          const { stdout: wcOut } = await execAsync(`wc -l < "${hookDestPath}"`, { timeout: 5000 });
-          res.json({ success: true, output: `$ cp bashback-hook.sh ~/.claude/hooks/ && chmod +x ~/.claude/hooks/bashback-hook.sh\n$ ls -la ~/.claude/hooks/bashback-hook.sh\n${lsOut.trim()}\n$ wc -l < ~/.claude/hooks/bashback-hook.sh\n${wcOut.trim()} lines` });
+          const promptHookContent = await readFile(promptHookSourcePath, 'utf-8');
+          await writeFile(promptHookDestPath, promptHookContent, { mode: 0o755 });
+          const { stdout: lsOut } = await execAsync(`ls -la "${claudeHooksDir}"/bashback-*.sh`, { timeout: 5000 });
+          res.json({ success: true, output: `$ cp bashback-*.sh ~/.claude/hooks/ && chmod +x ~/.claude/hooks/bashback-*.sh\n$ ls -la ~/.claude/hooks/bashback-*.sh\n${lsOut.trim()}` });
           break;
         }
         case 'configure-settings': {
           const output: string[] = [];
           const hookEntry = { type: 'command', command: '~/.claude/hooks/bashback-hook.sh' };
+          const promptHookEntry = { type: 'command', command: '~/.claude/hooks/bashback-prompt-hook.sh' };
 
           // Read existing settings
           let settings: Record<string, unknown> = {};
@@ -500,13 +540,12 @@ async function main() {
             settingsExisted = true;
           } catch { /* File doesn't exist */ }
 
-          output.push(`$ jq '.hooks.PostToolUse' ~/.claude/settings.json`);
-
           if (!settingsExisted) {
-            output.push('null (file not found, creating new config)\n');
+            output.push('settings.json not found, creating new config\n');
           }
 
-          // Check existing hooks
+          // --- PostToolUse (Bash commands) ---
+          output.push('# PostToolUse (Bash commands)');
           if (!settings.hooks) settings.hooks = {};
           const hooks = settings.hooks as Record<string, unknown[]>;
           if (!hooks.PostToolUse) hooks.PostToolUse = [];
@@ -516,44 +555,40 @@ async function main() {
 
           if (bashHook) {
             if (!bashHook.hooks) bashHook.hooks = [];
-
-            // Show current state
-            output.push(JSON.stringify(postToolUse, null, 2));
-
-            // Already installed?
             const alreadyInstalled = bashHook.hooks.some(h => h.command?.includes('bashback-hook.sh'));
             if (alreadyInstalled) {
-              output.push(`\nbashback-hook.sh already present in hooks.PostToolUse[matcher=Bash].hooks — nothing to do.`);
-              res.json({ success: true, output: output.join('\n') });
-              break;
-            }
-
-            // Append to existing Bash hooks array
-            const beforeCount = bashHook.hooks.length;
-            bashHook.hooks.push(hookEntry);
-            output.push(`\n# Found ${beforeCount} existing hook(s) in PostToolUse[matcher=Bash].hooks`);
-            output.push(`# Appending bashback-hook.sh (hooks[${beforeCount}])`);
-          } else {
-            // Show current state
-            if (postToolUse.length > 0) {
-              output.push(JSON.stringify(postToolUse, null, 2));
-              output.push(`\n# No entry with matcher=Bash found`);
+              output.push('bashback-hook.sh already configured');
             } else {
-              output.push('[] (empty)\n');
+              bashHook.hooks.push(hookEntry);
+              output.push('Added bashback-hook.sh to PostToolUse[matcher=Bash]');
             }
-
-            // Create new Bash matcher entry
-            output.push(`# Creating new PostToolUse entry: { matcher: "Bash", hooks: [...] }`);
+          } else {
             postToolUse.push({ matcher: 'Bash', hooks: [hookEntry] });
+            output.push('Created PostToolUse entry with bashback-hook.sh');
+          }
+
+          // --- UserPromptSubmit (user prompts) ---
+          output.push('\n# UserPromptSubmit (user prompts)');
+          if (!hooks.UserPromptSubmit) hooks.UserPromptSubmit = [];
+
+          const userPromptSubmit = hooks.UserPromptSubmit as { hooks?: { type?: string; command?: string }[] }[];
+          const existingPromptHook = userPromptSubmit.find(h =>
+            h.hooks?.some(hh => hh.command?.includes('bashback-prompt-hook.sh'))
+          );
+
+          if (existingPromptHook) {
+            output.push('bashback-prompt-hook.sh already configured');
+          } else {
+            userPromptSubmit.push({ hooks: [promptHookEntry] });
+            output.push('Created UserPromptSubmit entry with bashback-prompt-hook.sh');
           }
 
           await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 
           // Show result
           const resultSettings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
-          const resultHooks = JSON.stringify(resultSettings.hooks?.PostToolUse, null, 2);
-          output.push(`\n$ jq '.hooks.PostToolUse' ~/.claude/settings.json`);
-          output.push(resultHooks);
+          output.push('\n$ jq \'.hooks\' ~/.claude/settings.json');
+          output.push(JSON.stringify(resultSettings.hooks, null, 2));
 
           res.json({ success: true, output: output.join('\n') });
           break;
@@ -561,43 +596,39 @@ async function main() {
         case 'verify': {
           const output: string[] = [];
 
-          // Check hook file
-          output.push(`$ ls -la ~/.claude/hooks/bashback-hook.sh`);
+          // Check bash hook file
+          output.push(`$ ls -la ~/.claude/hooks/bashback-*.sh`);
           try {
-            const { stdout } = await execAsync(`ls -la "${hookDestPath}"`, { timeout: 5000 });
+            const { stdout } = await execAsync(`ls -la "${claudeHooksDir}"/bashback-*.sh`, { timeout: 5000 });
             output.push(stdout.trim());
           } catch {
             output.push('ls: cannot access: No such file or directory');
           }
 
-          // Check executable
-          output.push(`\n$ test -x ~/.claude/hooks/bashback-hook.sh && echo "executable: yes" || echo "executable: no"`);
-          try {
-            await execAsync(`test -x "${hookDestPath}"`);
-            output.push('executable: yes');
-          } catch {
-            output.push('executable: no');
-          }
+          // Check executables
+          const hookOk = existsSync(hookDestPath);
+          const promptHookOk = existsSync(promptHookDestPath);
+          let execOk = false;
+          let promptExecOk = false;
+          try { await execAsync(`test -x "${hookDestPath}"`); execOk = true; } catch { /* */ }
+          try { await execAsync(`test -x "${promptHookDestPath}"`); promptExecOk = true; } catch { /* */ }
+
+          output.push(`\nbashback-hook.sh: ${hookOk && execOk ? 'OK' : 'MISSING'}`);
+          output.push(`bashback-prompt-hook.sh: ${promptHookOk && promptExecOk ? 'OK' : 'MISSING'}`);
 
           // Check settings
-          output.push(`\n$ grep bashback-hook ~/.claude/settings.json`);
-          try {
-            const { stdout } = await execAsync(`grep "bashback-hook" "${claudeSettingsPath}"`, { timeout: 5000 });
-            output.push(stdout.trim());
-          } catch {
-            output.push('(no match)');
-          }
-
-          const hookOk = existsSync(hookDestPath);
-          let execOk = false;
-          try { await execAsync(`test -x "${hookDestPath}"`); execOk = true; } catch { /* */ }
           let settingsOk = false;
+          let promptSettingsOk = false;
           try {
             const c = await readFile(claudeSettingsPath, 'utf-8');
             settingsOk = c.includes('bashback-hook.sh');
+            promptSettingsOk = c.includes('bashback-prompt-hook.sh');
           } catch { /* */ }
 
-          const allGood = hookOk && execOk && settingsOk;
+          output.push(`\nPostToolUse config: ${settingsOk ? 'OK' : 'MISSING'}`);
+          output.push(`UserPromptSubmit config: ${promptSettingsOk ? 'OK' : 'MISSING'}`);
+
+          const allGood = hookOk && execOk && settingsOk && promptHookOk && promptExecOk && promptSettingsOk;
           if (!allGood) {
             output.push('\n--- Some checks failed. Review the steps above. ---');
           }
@@ -628,11 +659,36 @@ async function main() {
 
   const seenIds = new Set<string>();
 
-  watchLogFile((command) => {
-    if (!seenIds.has(command.id)) {
-      seenIds.add(command.id);
-      console.log(`bashback: new command: ${command.command}`);
-      broadcast(command);
+  // Strip Claude Code system XML tags from captured prompts
+  function stripSystemTags(text: string): string {
+    let cleaned = text;
+    for (const tag of [
+      'ide_opened_file', 'ide_selection', 'ide_visible_files',
+      'system-reminder', 'antml:thinking', 'antml:function_calls',
+      'antml:invoke', 'antml:parameter',
+    ]) {
+      cleaned = cleaned.replace(new RegExp(`<${tag}[^>]*>[\\s\\S]*?</${tag}>`, 'g'), '');
+    }
+    cleaned = cleaned.replace(/<(?:ide_|system-|antml:)[^>]*\/>/g, '');
+    return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  watchLogFile(async (entry) => {
+    if (seenIds.has(entry.id)) return;
+    seenIds.add(entry.id);
+
+    if (entry.type === 'prompt') {
+      const cleanPrompt = stripSystemTags(entry.prompt);
+      if (!cleanPrompt) return;
+      console.log(`bashback: new prompt (${cleanPrompt.length} chars)`);
+      const corrections = await checkSpelling(cleanPrompt);
+      broadcast({
+        type: 'prompt',
+        data: { id: entry.id, timestamp: entry.timestamp, prompt: cleanPrompt, corrections },
+      });
+    } else {
+      console.log(`bashback: new command: ${entry.command}`);
+      broadcast({ type: 'command', data: entry });
     }
   });
 

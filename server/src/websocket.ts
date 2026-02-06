@@ -1,9 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
-import type { ParsedCommand } from './parser.js';
 
 export function createWebSocketServer(server: Server): {
-  broadcast: (command: ParsedCommand) => void;
+  broadcast: (message: { type: string; data: unknown }) => void;
 } {
   const wss = new WebSocketServer({ server });
 
@@ -24,11 +23,11 @@ export function createWebSocketServer(server: Server): {
     });
   });
 
-  const broadcast = (command: ParsedCommand) => {
-    const message = JSON.stringify({ type: 'command', data: command });
+  const broadcast = (message: { type: string; data: unknown }) => {
+    const json = JSON.stringify(message);
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
+        client.send(json);
       }
     }
   };

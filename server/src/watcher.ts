@@ -1,10 +1,10 @@
 import chokidar from 'chokidar';
 import { readFile, stat, writeFile } from 'fs/promises';
-import { parseLine, type ParsedCommand } from './parser.js';
+import { parseLine, type ParsedEntry } from './parser.js';
 
 const LOG_FILE = '/tmp/bashback.log';
 
-export type CommandHandler = (command: ParsedCommand) => void;
+export type EntryHandler = (entry: ParsedEntry) => void;
 
 export async function ensureLogFile(): Promise<void> {
   try {
@@ -14,7 +14,7 @@ export async function ensureLogFile(): Promise<void> {
   }
 }
 
-export async function getHistory(): Promise<ParsedCommand[]> {
+export async function getHistory(): Promise<ParsedEntry[]> {
   try {
     const content = await readFile(LOG_FILE, 'utf-8');
     return content
@@ -27,15 +27,15 @@ export async function getHistory(): Promise<ParsedCommand[]> {
         }
         return parsed;
       })
-      .filter((cmd): cmd is ParsedCommand => cmd !== null);
+      .filter((entry): entry is ParsedEntry => entry !== null);
   } catch {
     return [];
   }
 }
 
-export function watchLogFile(onCommand: CommandHandler): () => void {
+export function watchLogFile(onEntry: EntryHandler): () => void {
   let lastSize = 0;
-  let lineCounter = 0;
+  let lastLineCount = 0;
 
   const processNewContent = async () => {
     try {
@@ -46,19 +46,22 @@ export function watchLogFile(onCommand: CommandHandler): () => void {
         const content = await readFile(LOG_FILE, 'utf-8');
         const lines = content.split('\n').filter((line) => line.trim());
 
-        for (let i = Math.max(0, lines.length - 10); i < lines.length; i++) {
+        // Only process lines we haven't seen yet
+        for (let i = lastLineCount; i < lines.length; i++) {
           const line = lines[i];
           const parsed = parseLine(line);
           if (parsed) {
-            parsed.id = `${parsed.timestamp}-${lineCounter++}`;
-            onCommand(parsed);
+            parsed.id = `${parsed.timestamp}-${i}`;
+            onEntry(parsed);
           }
         }
 
+        lastLineCount = lines.length;
         lastSize = currentSize;
       } else if (currentSize < lastSize) {
+        // File was truncated (e.g. clear log)
         lastSize = currentSize;
-        lineCounter = 0;
+        lastLineCount = 0;
       }
     } catch {
       // File might not exist yet
@@ -74,13 +77,18 @@ export function watchLogFile(onCommand: CommandHandler): () => void {
   watcher.on('change', processNewContent);
   watcher.on('add', processNewContent);
 
-  // Initialize lastSize
-  stat(LOG_FILE)
+  // Initialize lastSize and lastLineCount to skip existing content
+  readFile(LOG_FILE, 'utf-8')
+    .then((content) => {
+      lastLineCount = content.split('\n').filter((line) => line.trim()).length;
+      return stat(LOG_FILE);
+    })
     .then((stats) => {
       lastSize = stats.size;
     })
     .catch(() => {
       lastSize = 0;
+      lastLineCount = 0;
     });
 
   return () => {

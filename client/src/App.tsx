@@ -3,8 +3,10 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { CommandList } from './components/CommandList';
 import { Filters } from './components/Filters';
 import { Header } from './components/Header';
+import { PromptPanel } from './components/PromptPanel';
 import { DescriptionsProvider } from './context/DescriptionsContext';
 import { PrivacyProvider } from './context/PrivacyContext';
+import { SpellCheckProvider, useSpellCheck } from './context/SpellCheckContext';
 
 function getBaseCommand(command: string): string {
   const parts = command.trim().split(/\s+/);
@@ -59,8 +61,14 @@ function extractOperators(command: string): string[] {
   return operators;
 }
 
+function EasterEggPanel() {
+  const { easterEggActive } = useSpellCheck();
+  if (!easterEggActive) return null;
+  return <PromptPanel />;
+}
+
 export default function App() {
-  const { commands, connected, clearLog } = useWebSocket();
+  const { commands, prompts, connected, clearLog } = useWebSocket();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [selectedCommand, setSelectedCommand] = useState<string | null>(null);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
@@ -123,6 +131,7 @@ export default function App() {
 
   return (
     <PrivacyProvider>
+    <SpellCheckProvider prompts={prompts}>
     <DescriptionsProvider>
       <div className="flex h-screen flex-col">
         <Header
@@ -150,9 +159,12 @@ export default function App() {
         <main className="flex-1 overflow-hidden">
           <CommandList commands={filteredCommands} />
         </main>
+
+        <EasterEggPanel />
       </div>
     </div>
     </DescriptionsProvider>
+    </SpellCheckProvider>
     </PrivacyProvider>
   );
 }
