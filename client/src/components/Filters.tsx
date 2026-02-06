@@ -3,6 +3,7 @@ const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'for', 'do',
 
 interface FiltersProps {
   workspaces: string[];
+  workspaceSources: Record<string, 'git' | 'dir'>;
   selectedWorkspace: string | null;
   onSelectWorkspace: (workspace: string | null) => void;
   baseCommands: string[];
@@ -18,6 +19,7 @@ interface FiltersProps {
 
 export function Filters({
   workspaces,
+  workspaceSources,
   selectedWorkspace,
   onSelectWorkspace,
   baseCommands,
@@ -69,7 +71,7 @@ export function Filters({
                   selectedWorkspace === ws
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                }`}
+                }${workspaceSources[ws] === 'dir' ? ' italic' : ''}`}
               >
                 {ws}
               </button>

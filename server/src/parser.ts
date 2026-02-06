@@ -1,6 +1,7 @@
 export interface ParsedCommand {
   timestamp: string;
   workspace: string;
+  workspaceSource: 'git' | 'dir';
   command: string;
   id: string;
 }
@@ -13,6 +14,7 @@ const LINE_REGEX_LEGACY = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] CMD: (.+)$
 interface JsonLogEntry {
   timestamp: string;
   workspace: string;
+  workspace_source?: string;
   command: string;
 }
 
@@ -23,6 +25,7 @@ function parseJsonLine(line: string): ParsedCommand | null {
       return {
         timestamp: entry.timestamp,
         workspace: entry.workspace || 'unknown',
+        workspaceSource: (entry.workspace_source === 'git' ? 'git' : 'dir'),
         command: entry.command,
         id: `${entry.timestamp}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       };
@@ -39,6 +42,7 @@ function parseLegacyLine(line: string): ParsedCommand | null {
     return {
       timestamp: match[1],
       workspace: match[2],
+      workspaceSource: 'dir',
       command: match[3],
       id: `${match[1]}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     };
@@ -50,6 +54,7 @@ function parseLegacyLine(line: string): ParsedCommand | null {
     return {
       timestamp: match[1],
       workspace: 'unknown',
+      workspaceSource: 'dir',
       command: match[2],
       id: `${match[1]}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     };

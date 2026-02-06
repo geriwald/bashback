@@ -8,6 +8,7 @@ import { API_URL } from '../lib/apiConfig';
 interface CommandCardProps {
   timestamp: string;
   workspace: string;
+  workspaceSource: 'git' | 'dir';
   command: string;
 }
 
@@ -558,7 +559,7 @@ function countLines(cmd: string): number {
   return cmd.split('\n').length;
 }
 
-export function CommandCard({ timestamp, workspace, command }: CommandCardProps) {
+export function CommandCard({ timestamp, workspace, workspaceSource, command }: CommandCardProps) {
   const { getCommandDescription, setCommandDescription } = useDescriptions();
   const { redact, privacyMode } = usePrivacy();
 
@@ -610,7 +611,7 @@ export function CommandCard({ timestamp, workspace, command }: CommandCardProps)
         <span className="rounded bg-gray-800 px-2 py-1 font-mono text-xs text-gray-400">
           {timestamp}
         </span>
-        <span className="rounded bg-blue-900/50 px-2 py-1 text-xs font-medium text-blue-300">
+        <span className={`rounded bg-blue-900/50 px-2 py-1 text-xs font-medium text-blue-300${workspaceSource === 'dir' ? ' italic' : ''}`}>
           {redact(workspace)}
         </span>
         {sshInfo && (

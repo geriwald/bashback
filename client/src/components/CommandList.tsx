@@ -28,6 +28,7 @@ export function CommandList({ commands }: CommandListProps) {
             key={cmd.id}
             timestamp={cmd.timestamp}
             workspace={cmd.workspace}
+            workspaceSource={cmd.workspaceSource}
             command={cmd.command}
           />
         ))}

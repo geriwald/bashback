@@ -33,11 +33,19 @@ if command -v jq &>/dev/null; then
     # Le cwd (current working directory) représente le workspace
     workspace=$(echo "$input" | jq -r '.cwd // .session.cwd // empty' 2>/dev/null)
 
-    # Fallback: extraire le nom du dossier depuis le cwd
+    # Remonter au git root pour avoir le vrai nom du projet
     if [ -n "$workspace" ]; then
-        workspace=$(basename "$workspace")
+        gitroot=$(git -C "$workspace" rev-parse --show-toplevel 2>/dev/null)
+        if [ -n "$gitroot" ]; then
+            workspace=$(basename "$gitroot")
+            ws_source="git"
+        else
+            workspace=$(basename "$workspace")
+            ws_source="dir"
+        fi
     else
         workspace="unknown"
+        ws_source="dir"
     fi
 else
     # Fallback sans jq
@@ -51,8 +59,8 @@ ts=$(date '+%Y-%m-%d %H:%M:%S')
 # Logger au format JSON Lines (préserve les commandes multilignes)
 if [ -n "$cmd" ]; then
     # Utiliser jq pour créer du JSON valide avec échappement correct des newlines
-    jq -nc --arg ts "$ts" --arg ws "$workspace" --arg cmd "$cmd" \
-        '{timestamp: $ts, workspace: $ws, command: $cmd}' >> "$LOG_FILE"
+    jq -nc --arg ts "$ts" --arg ws "$workspace" --arg wss "$ws_source" --arg cmd "$cmd" \
+        '{timestamp: $ts, workspace: $ws, workspace_source: $wss, command: $cmd}' >> "$LOG_FILE"
 fi
 
 # Exit 0 = ne pas bloquer l'exécution

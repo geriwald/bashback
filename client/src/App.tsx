@@ -70,6 +70,17 @@ export default function App() {
     return Array.from(unique).sort();
   }, [commands]);
 
+  const workspaceSources = useMemo(() => {
+    const sources: Record<string, 'git' | 'dir'> = {};
+    commands.forEach((cmd) => {
+      // git wins over dir if any command reports git
+      if (!sources[cmd.workspace] || cmd.workspaceSource === 'git') {
+        sources[cmd.workspace] = cmd.workspaceSource;
+      }
+    });
+    return sources;
+  }, [commands]);
+
   const baseCommands = useMemo(() => {
     const counts = new Map<string, number>();
     commands.forEach((cmd) => {
@@ -122,6 +133,7 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         <Filters
           workspaces={workspaces}
+          workspaceSources={workspaceSources}
           selectedWorkspace={selectedWorkspace}
           onSelectWorkspace={setSelectedWorkspace}
           baseCommands={baseCommands}

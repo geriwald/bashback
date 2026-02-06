@@ -10,16 +10,16 @@ export function createWebSocketServer(server: Server): {
   const clients = new Set<WebSocket>();
 
   wss.on('connection', (ws) => {
-    console.log('Client connected');
+    console.log('bashback: client connected');
     clients.add(ws);
 
     ws.on('close', () => {
-      console.log('Client disconnected');
+      console.log('bashback: client disconnected');
       clients.delete(ws);
     });
 
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      console.error('bashback: websocket error:', error);
       clients.delete(ws);
     });
   });

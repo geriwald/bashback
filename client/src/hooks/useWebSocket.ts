@@ -5,6 +5,7 @@ export interface Command {
   id: string;
   timestamp: string;
   workspace: string;
+  workspaceSource: 'git' | 'dir';
   command: string;
 }
 
