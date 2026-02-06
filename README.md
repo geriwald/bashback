@@ -46,9 +46,13 @@ Claude Code → bashback-hook.sh → /tmp/bashback.log → Node.js server → We
 ### Option 1: Docker (recommended)
 
 ```bash
-# Pull and run
-docker pull ghcr.io/geriwald/bashback:latest
-docker compose up -d
+docker run -d \
+  --name bashback \
+  -p 3001:3001 \
+  -v /tmp/bashback.log:/tmp/bashback.log \
+  -v ~/.claude:/root/.claude \
+  --restart unless-stopped \
+  ghcr.io/geriwald/bashback:latest
 
 # Open http://localhost:3001
 ```
@@ -91,10 +95,6 @@ See [hook/README.md](hook/README.md) for manual setup instructions.
 ```bash
 # One-liner: launch and open browser
 ./bashback.sh
-
-# Or manually
-docker compose up -d
-xdg-open http://localhost:3001
 ```
 
 To add a desktop shortcut:
@@ -112,6 +112,8 @@ cp bashback.desktop ~/.local/share/applications/
 
 ### docker-compose.yml
 
+If you prefer using Docker Compose (requires cloning the repo or creating this file):
+
 ```yaml
 services:
   bashback:
@@ -120,6 +122,7 @@ services:
       - "3001:3001"
     volumes:
       - /tmp/bashback.log:/tmp/bashback.log
+      - ~/.claude:/root/.claude
     restart: unless-stopped
 ```
 
