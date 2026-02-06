@@ -118,7 +118,7 @@ export function StepRunnerModal({ title, stepsEndpoint, executeEndpoint, onClose
                     </div>
                     <button
                       onClick={() => executeStep(step.id)}
-                      disabled={state.status === 'running' || runningAll}
+                      disabled={state.status === 'running' || state.status === 'success' || runningAll}
                       className={`shrink-0 rounded px-3 py-1.5 text-xs font-medium transition ${
                         state.status === 'success'
                           ? 'bg-green-900/50 text-green-300'
@@ -163,19 +163,28 @@ export function StepRunnerModal({ title, stepsEndpoint, executeEndpoint, onClose
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-gray-800 px-6 py-4">
-          <button
-            onClick={runAll}
-            disabled={runningAll || allDone}
-            className="rounded bg-purple-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-600 disabled:opacity-50"
-          >
-            {runningAll ? 'Running all steps...' : allDone ? 'All steps completed' : 'Run all steps'}
-          </button>
+          {allDone ? (
+            <button
+              onClick={onClose}
+              className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-green-600"
+            >
+              Close
+            </button>
+          ) : (
+            <button
+              onClick={runAll}
+              disabled={runningAll}
+              className="rounded bg-purple-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-purple-600 disabled:opacity-50"
+            >
+              {runningAll ? 'Running all steps...' : 'Run all steps'}
+            </button>
+          )}
           {allDone && (
             <span className="text-sm text-green-400 flex items-center gap-1.5">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Installation complete — restart Claude Code
+              New Claude Code sessions will use the hook
             </span>
           )}
         </div>
