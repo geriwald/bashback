@@ -46,7 +46,7 @@ export function Header({ connected, onClearLog }: HeaderProps) {
           }`}
           title={privacyMode ? 'Privacy mode ON - sensitive info masked' : 'Privacy mode OFF - click to mask sensitive info'}
         >
-          {privacyMode ? 'Privacy ON' : 'Privacy'}
+          {privacyMode ? 'Privacy ON' : 'Privacy OFF'}
         </button>
         <SaveButton />
         <button
