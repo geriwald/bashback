@@ -84,15 +84,31 @@ After installation, **restart Claude Code** to activate the hook.
 
 See [hook/README.md](hook/README.md) for manual setup instructions.
 
-## Docker on Windows
+## Platform Setup
 
-bashback can run as a Docker container on Windows with Docker Desktop + WSL2.
+### Linux
+
+```bash
+# One-liner: launch and open browser
+./bashback.sh
+
+# Or manually
+docker compose up -d
+xdg-open http://localhost:3001
+```
+
+To add a desktop shortcut:
+
+```bash
+# Edit the Exec path in bashback.desktop to match your install location
+cp bashback.desktop ~/.local/share/applications/
+```
+
+### Windows (WSL2 + Docker Desktop)
 
 1. Place `bashback.bat` somewhere accessible (e.g., Desktop)
 2. Right-click → Pin to taskbar
 3. Click to start bashback — it opens `http://localhost:3001` automatically
-
-The container mounts `/tmp/bashback.log` from WSL, so the hook running in your WSL terminal feeds commands to the Docker container.
 
 ### docker-compose.yml
 

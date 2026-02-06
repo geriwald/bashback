@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=bashback
+Comment=Real-time command viewer for Claude Code
+Exec=bash -c 'docker compose -f /opt/bashback/docker-compose.yml up -d && sleep 2 && xdg-open http://localhost:3001'
+Type=Application
+Categories=Development;
+Terminal=false
+StartupNotify=true
