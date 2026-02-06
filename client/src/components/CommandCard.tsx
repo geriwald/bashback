@@ -61,8 +61,6 @@ const SSH_FLAGS_WITH_VALUE = new Set([
   '-b', '-c', '-E', '-S', '-W', '-e', '-m', '-O', '-Q',
 ]);
 
-const IP_PATTERN = /\d+\.\d+\.\d+\.\d+/;
-
 interface SSHInfo {
   hostDisplay: string;
   remoteCommand: string;
@@ -118,18 +116,7 @@ function parseSSHCommand(command: string): SSHInfo | null {
 
   if (!remoteCommand.trim()) return null;
 
-  // Redact host if it contains IP addresses
-  let hostDisplay = host;
-  if (IP_PATTERN.test(host)) {
-    const atIndex = host.indexOf('@');
-    hostDisplay = atIndex !== -1 ? host.slice(0, atIndex + 1) + '***' : '***';
-  }
-  // Redact user@host if password-like patterns exist
-  if (host.includes(':') && host.includes('@')) {
-    hostDisplay = host.split('@')[0] + '@***';
-  }
-
-  return { hostDisplay, remoteCommand };
+  return { hostDisplay: host, remoteCommand };
 }
 
 // Detect inline code commands (node -e, python -c, etc.) and simplify them
