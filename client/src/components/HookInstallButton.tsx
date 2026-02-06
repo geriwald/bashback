@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { API_URL } from '../lib/apiConfig';
+import { StepRunnerModal } from './StepRunnerModal';
 
 interface HookStatus {
   installed: boolean;
@@ -9,34 +10,16 @@ interface HookStatus {
 
 export function HookInstallButton() {
   const [status, setStatus] = useState<HookStatus | null>(null);
-  const [installing, setInstalling] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
-  useEffect(() => {
+  const checkStatus = () => {
     fetch(`${API_URL}/api/hook-status`)
       .then((res) => res.json())
       .then((data) => setStatus(data))
       .catch(() => setStatus(null));
-  }, []);
-
-  const handleInstall = async () => {
-    setInstalling(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`${API_URL}/api/install-hook`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setMessage('Installed! Restart Claude Code.');
-        setStatus({ installed: true, hookExists: true, hookConfigured: true });
-      } else {
-        setMessage(data.error || 'Failed');
-      }
-    } catch {
-      setMessage('Error');
-    }
-    setInstalling(false);
-    setTimeout(() => setMessage(null), 4000);
   };
+
+  useEffect(() => { checkStatus(); }, []);
 
   if (status?.installed) {
     return (
@@ -50,13 +33,27 @@ export function HookInstallButton() {
   }
 
   return (
-    <button
-      onClick={handleInstall}
-      disabled={installing}
-      className="rounded bg-indigo-700 px-3 py-1.5 text-sm text-white transition hover:bg-indigo-600 disabled:opacity-50"
-      title="Install bashback hook for Claude Code"
-    >
-      {installing ? 'Installing...' : message ? message : 'Install hook'}
-    </button>
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        className="rounded bg-indigo-700 px-3 py-1.5 text-sm text-white transition hover:bg-indigo-600"
+        title="Install bashback hook for Claude Code"
+      >
+        Install hook
+      </button>
+
+      {showModal && (
+        <StepRunnerModal
+          title="Hook Installation"
+          stepsEndpoint="/api/install-steps"
+          executeEndpoint={(stepId) => `/api/install-steps/${stepId}/execute`}
+          onClose={() => setShowModal(false)}
+          onComplete={() => {
+            checkStatus();
+            setTimeout(() => setShowModal(false), 2000);
+          }}
+        />
+      )}
+    </>
   );
 }
