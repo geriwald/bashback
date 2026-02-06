@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { readFile, writeFile, appendFile } from 'fs/promises';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createWebSocketServer } from './websocket.js';
@@ -429,6 +430,15 @@ async function main() {
       res.status(500).json({ error: 'Failed to install hook' });
     }
   });
+
+  // Serve built client in production (after all API routes)
+  const clientDistPath = join(__dirname, '../../client/dist');
+  if (existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(join(clientDistPath, 'index.html'));
+    });
+  }
 
   const server = createServer(app);
   const { broadcast } = createWebSocketServer(server);
