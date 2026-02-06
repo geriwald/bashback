@@ -426,21 +426,34 @@ function renderTokenize(cmd: string): string[] {
   return result;
 }
 
+// Flags whose value argument contains secrets
+const SENSITIVE_FLAGS = new Set(['--token', '--password', '--secret', '--key', '--user', '-u', '-U']);
+
 // Render a single command with custom highlighting
-function renderCommand(cmd: string, knownFlags: Set<string>, redact: (s: string) => string = s => s) {
+function renderCommand(cmd: string, knownFlags: Set<string>, redact: (s: string) => string = s => s, privacyMode = false) {
   // Quote-aware split on whitespace and redirections/substitutions
   const parts = renderTokenize(cmd.trim());
   const elements: JSX.Element[] = [];
   let foundCommand = false;
+  let redactNextArg = false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (!part) continue;
     const key = `part-${i}`;
 
-    // Whitespace
+    // Whitespace (don't reset redactNextArg - skip through to value)
     if (/^\s+$/.test(part)) {
       elements.push(<span key={key}>{part}</span>);
+      continue;
+    }
+
+    // Redact value after sensitive flag (--token xxx, -u xxx)
+    if (redactNextArg) {
+      redactNextArg = false;
+      elements.push(
+        <span key={key} className="text-gray-300">{'\u2022\u2022\u2022'}</span>
+      );
       continue;
     }
 
@@ -481,6 +494,25 @@ function renderCommand(cmd: string, knownFlags: Set<string>, redact: (s: string)
     // Flags
     if (part.startsWith('-')) {
       const isUnknown = !knownFlags.has(part);
+
+      // Handle --flag=value with sensitive flag
+      const eqIdx = part.indexOf('=');
+      if (privacyMode && eqIdx !== -1 && SENSITIVE_FLAGS.has(part.slice(0, eqIdx))) {
+        const flagPart = part.slice(0, eqIdx + 1);
+        elements.push(
+          <span key={key}>
+            <span className={isUnknown ? 'text-orange-400' : 'text-cyan-400'}>{flagPart}</span>
+            <span className="text-gray-300">{'\u2022\u2022\u2022'}</span>
+          </span>
+        );
+        continue;
+      }
+
+      // Track sensitive flag for next value argument
+      if (privacyMode && SENSITIVE_FLAGS.has(part)) {
+        redactNextArg = true;
+      }
+
       elements.push(
         <span
           key={key}
@@ -661,7 +693,7 @@ export function CommandCard({ timestamp, workspace, workspaceSource, command }: 
             }
             return (
               <span key={i}>
-                {renderCommand(segment.value, knownFlags, redact)}
+                {renderCommand(segment.value, knownFlags, redact, privacyMode)}
               </span>
             );
           })}
