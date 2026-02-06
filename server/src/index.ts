@@ -365,69 +365,184 @@ async function main() {
     }
   });
 
-  // Install the Claude hook
+  // Install the Claude hook (legacy single-step endpoint)
   app.post('/api/install-hook', async (_req, res) => {
     try {
-      // 1. Create hooks directory if needed
       await execAsync(`mkdir -p "${claudeHooksDir}"`);
-
-      // 2. Copy hook script
       const hookContent = await readFile(hookSourcePath, 'utf-8');
       await writeFile(hookDestPath, hookContent, { mode: 0o755 });
 
-      // 3. Update settings.json
       let settings: Record<string, unknown> = {};
       try {
         settings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
-      } catch {
-        // File doesn't exist, start fresh
-      }
+      } catch { /* File doesn't exist */ }
 
-      // Ensure hooks structure exists
       if (!settings.hooks) settings.hooks = {};
       const hooks = settings.hooks as Record<string, unknown[]>;
       if (!hooks.PostToolUse) hooks.PostToolUse = [];
 
-      // Check if bashback hook already configured
       const postToolUse = hooks.PostToolUse as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
       const bashHook = postToolUse.find(h => h.matcher === 'Bash');
 
       if (bashHook) {
-        // Add to existing Bash hooks if not already there
         if (!bashHook.hooks) bashHook.hooks = [];
         const alreadyInstalled = bashHook.hooks.some(h => h.command?.includes('bashback-hook.sh'));
         if (!alreadyInstalled) {
-          bashHook.hooks.push({
-            type: 'command',
-            command: '~/.claude/hooks/bashback-hook.sh',
-          });
+          bashHook.hooks.push({ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' });
         }
       } else {
-        // Create new Bash hook entry
         postToolUse.push({
           matcher: 'Bash',
-          hooks: [{
-            type: 'command',
-            command: '~/.claude/hooks/bashback-hook.sh',
-          }],
+          hooks: [{ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' }],
         });
       }
 
       await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 
-      // Add a sample command to demonstrate bashback
       const now = new Date();
       const timestamp = now.toISOString().replace('T', ' ').substring(0, 19);
       const sampleLine = `{"timestamp":"${timestamp}","workspace":"bashback","command":"echo 'Welcome to bashback! Hook installed successfully.'"}\n`;
       await appendFile('/tmp/bashback.log', sampleLine, 'utf-8');
 
-      res.json({
-        success: true,
-        message: 'Hook installed! Restart Claude Code to activate.',
-      });
+      res.json({ success: true, message: 'Hook installed! Restart Claude Code to activate.' });
     } catch (error) {
       console.error('Error installing hook:', error);
       res.status(500).json({ error: 'Failed to install hook' });
+    }
+  });
+
+  // Step-by-step installation API
+  interface InstallStep {
+    id: string;
+    title: string;
+    description: string;
+    command: string;
+  }
+
+  app.get('/api/install-steps', (_req, res) => {
+    const steps: InstallStep[] = [
+      {
+        id: 'check-jq',
+        title: 'Check jq dependency',
+        description: 'Verify that jq (JSON processor) is installed',
+        command: 'which jq && jq --version',
+      },
+      {
+        id: 'create-hooks-dir',
+        title: 'Create hooks directory',
+        description: 'Create the Claude Code hooks directory if it does not exist',
+        command: `mkdir -p ${claudeHooksDir}`,
+      },
+      {
+        id: 'copy-hook',
+        title: 'Copy hook script',
+        description: 'Copy bashback-hook.sh to the Claude hooks directory',
+        command: `cp ${hookSourcePath} ${hookDestPath} && chmod +x ${hookDestPath}`,
+      },
+      {
+        id: 'configure-settings',
+        title: 'Configure Claude settings',
+        description: 'Add the bashback hook to Claude Code PostToolUse settings',
+        command: `cat ${claudeSettingsPath} 2>/dev/null || echo '{}'`,
+      },
+      {
+        id: 'verify',
+        title: 'Verify installation',
+        description: 'Check that the hook is properly installed and configured',
+        command: `test -x ${hookDestPath} && echo "Hook script: OK" || echo "Hook script: MISSING"`,
+      },
+    ];
+    res.json(steps);
+  });
+
+  app.post('/api/install-steps/:stepId/execute', async (req, res) => {
+    const { stepId } = req.params;
+
+    try {
+      switch (stepId) {
+        case 'check-jq': {
+          const { stdout } = await execAsync('which jq && jq --version 2>&1', { timeout: 5000 });
+          res.json({ success: true, output: stdout.trim() });
+          break;
+        }
+        case 'create-hooks-dir': {
+          await execAsync(`mkdir -p "${claudeHooksDir}"`);
+          res.json({ success: true, output: `Created ${claudeHooksDir}` });
+          break;
+        }
+        case 'copy-hook': {
+          const hookContent = await readFile(hookSourcePath, 'utf-8');
+          await writeFile(hookDestPath, hookContent, { mode: 0o755 });
+          res.json({ success: true, output: `Copied to ${hookDestPath} (executable)` });
+          break;
+        }
+        case 'configure-settings': {
+          let settings: Record<string, unknown> = {};
+          try {
+            settings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
+          } catch { /* File doesn't exist */ }
+
+          if (!settings.hooks) settings.hooks = {};
+          const hooks = settings.hooks as Record<string, unknown[]>;
+          if (!hooks.PostToolUse) hooks.PostToolUse = [];
+
+          const postToolUse = hooks.PostToolUse as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
+          const bashHook = postToolUse.find(h => h.matcher === 'Bash');
+
+          if (bashHook) {
+            if (!bashHook.hooks) bashHook.hooks = [];
+            const alreadyInstalled = bashHook.hooks.some(h => h.command?.includes('bashback-hook.sh'));
+            if (alreadyInstalled) {
+              res.json({ success: true, output: 'Hook already configured in settings.json' });
+              break;
+            }
+            bashHook.hooks.push({ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' });
+          } else {
+            postToolUse.push({
+              matcher: 'Bash',
+              hooks: [{ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' }],
+            });
+          }
+
+          await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+          res.json({ success: true, output: 'Updated ~/.claude/settings.json with bashback hook' });
+          break;
+        }
+        case 'verify': {
+          const status = {
+            hookExists: existsSync(hookDestPath),
+            hookExecutable: false,
+            settingsConfigured: false,
+          };
+
+          try {
+            await execAsync(`test -x "${hookDestPath}"`);
+            status.hookExecutable = true;
+          } catch { /* not executable */ }
+
+          try {
+            const settingsContent = await readFile(claudeSettingsPath, 'utf-8');
+            status.settingsConfigured = settingsContent.includes('bashback-hook.sh');
+          } catch { /* no settings */ }
+
+          const allGood = status.hookExists && status.hookExecutable && status.settingsConfigured;
+          const output = [
+            `Hook file: ${status.hookExists ? 'OK' : 'MISSING'}`,
+            `Executable: ${status.hookExecutable ? 'OK' : 'NO'}`,
+            `Settings: ${status.settingsConfigured ? 'OK' : 'NOT CONFIGURED'}`,
+            '',
+            allGood ? 'All checks passed! Restart Claude Code to activate.' : 'Some checks failed. Review the steps above.',
+          ].join('\n');
+
+          res.json({ success: allGood, output });
+          break;
+        }
+        default:
+          res.status(404).json({ success: false, output: `Unknown step: ${stepId}` });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.json({ success: false, output: `Error: ${message}` });
     }
   });
 
