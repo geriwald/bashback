@@ -1,12 +1,27 @@
 # bashback
 
-Webapp locale pour visualiser en temps réel les commandes Bash exécutées par Claude Code, avec décomposition pédagogique des flags.
+Real-time command viewer for Claude Code sessions with pedagogical flag decomposition.
 
-## Concept
+![bashback main UI](docs/images/main-ui.png)
 
-Pendant une session de pair coding avec Claude Code, bashback intercepte les commandes via le système de hooks et les affiche dans une interface claire avec explication des flags, pour maintenir la compréhension de ce qui se passe.
+## What it does
+
+During pair coding sessions with Claude Code, bashback intercepts every Bash command via the hook system and displays them in a clean interface with:
+
+- Syntax-highlighted commands with operator tooltips
+- Flag decomposition from `--help` parsing
+- Editable descriptions you can customize and save
+- Privacy mode to mask sensitive data
+- SSH command transparency (shows remote commands)
+- Real-time WebSocket updates
+
+![Command decomposition](docs/images/command-decomposition.png)
 
 ## Architecture
+
+```
+Claude Code → bashback-hook.sh → /tmp/bashback.log → Node.js server → WebSocket → React UI
+```
 
 ```
 ┌─────────────────┐      hook stdin       ┌─────────────────┐
@@ -26,31 +41,106 @@ Pendant une session de pair coding avec Claude Code, bashback intercepte les com
 └─────────────────┘                       └─────────────────┘
 ```
 
-## Stack
+## Quick Start
 
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS
-- **Backend**: Node.js (Express/Fastify) + WebSocket
-- **Hook**: Bash script + jq
-
-## Installation
+### Option 1: Docker (recommended)
 
 ```bash
-npm run install:all
+# Pull and run
+docker pull ghcr.io/geriwald/bashback:latest
+docker compose up -d
+
+# Open http://localhost:3001
 ```
 
-## Usage
+### Option 2: Development mode
 
 ```bash
-# Lancer bashback (serveur + client)
+# Install dependencies
+npm run install:all
+
+# Start server + client
 npm run dev
 
-# Ouvrir http://localhost:5173
-# Utiliser Claude Code normalement - les commandes apparaissent en temps réel
+# Open http://localhost:5173
 ```
 
-## Configuration du hook Claude Code
+## Hook Installation
 
-Voir [hook/README.md](hook/README.md) pour les instructions d'installation du hook.
+Click the **Install hook** button in the bashback UI to open the step-by-step installer.
+
+![Hook installer modal](docs/images/hook-installer.png)
+
+The installer will:
+1. Check that `jq` is installed
+2. Create the `~/.claude/hooks/` directory
+3. Copy the hook script
+4. Configure Claude Code settings
+5. Verify the installation
+
+After installation, **restart Claude Code** to activate the hook.
+
+### Manual installation
+
+See [hook/README.md](hook/README.md) for manual setup instructions.
+
+## Docker on Windows
+
+bashback can run as a Docker container on Windows with Docker Desktop + WSL2.
+
+1. Place `bashback.bat` somewhere accessible (e.g., Desktop)
+2. Right-click → Pin to taskbar
+3. Click to start bashback — it opens `http://localhost:3001` automatically
+
+The container mounts `/tmp/bashback.log` from WSL, so the hook running in your WSL terminal feeds commands to the Docker container.
+
+### docker-compose.yml
+
+```yaml
+services:
+  bashback:
+    image: ghcr.io/geriwald/bashback:latest
+    ports:
+      - "3001:3001"
+    volumes:
+      - /tmp/bashback.log:/tmp/bashback.log
+    restart: unless-stopped
+```
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| Real-time commands | WebSocket updates as Claude Code runs commands |
+| Flag decomposition | Parses `--help` to explain every flag |
+| Custom descriptions | Edit and save your own explanations |
+| Privacy mode | Mask IPs, paths, and sensitive data |
+| SSH transparency | Shows remote commands inside SSH sessions |
+| Operator tooltips | Explains `&&`, `\|\|`, `\|`, `>`, `>>`, etc. |
+| Heredoc handling | Collapses heredoc content for readability |
+| Inline code detection | Simplifies `node -e '...'` displays |
+
+![Privacy mode](docs/images/privacy-mode.png)
+
+## Stack
+
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Node.js + Express + WebSocket
+- **Hook**: Bash script + jq
+- **Deployment**: Docker (multi-stage build)
+- **CI/CD**: GitHub Actions → GHCR
+
+## Contributing
+
+```bash
+# Clone and install
+git clone https://github.com/geriwald/bashback.git
+cd bashback
+npm run install:all
+
+# Development
+npm run dev
+```
 
 ## License
 
