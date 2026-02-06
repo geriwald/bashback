@@ -6,4 +6,5 @@ services:
       - "3001:3001"
     volumes:
       - /tmp/bashback.log:/tmp/bashback.log
+      - ~/.claude:/root/.claude
     restart: unless-stopped

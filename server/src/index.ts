@@ -420,6 +420,8 @@ async function main() {
   }
 
   app.get('/api/install-steps', (_req, res) => {
+    // Display paths use ~ for readability, actual execution uses resolved paths
+    const displayHome = '~/.claude';
     const steps: InstallStep[] = [
       {
         id: 'check-jq',
@@ -431,25 +433,25 @@ async function main() {
         id: 'create-hooks-dir',
         title: 'Create hooks directory',
         description: 'Create the Claude Code hooks directory if it does not exist',
-        command: `mkdir -p ${claudeHooksDir}`,
+        command: `mkdir -p ${displayHome}/hooks`,
       },
       {
         id: 'copy-hook',
         title: 'Copy hook script',
         description: 'Copy bashback-hook.sh to the Claude hooks directory',
-        command: `cp ${hookSourcePath} ${hookDestPath} && chmod +x ${hookDestPath}`,
+        command: `cp bashback-hook.sh ${displayHome}/hooks/ && chmod +x ${displayHome}/hooks/bashback-hook.sh`,
       },
       {
         id: 'configure-settings',
         title: 'Configure Claude settings',
         description: 'Add the bashback hook to Claude Code PostToolUse settings',
-        command: `cat ${claudeSettingsPath} 2>/dev/null || echo '{}'`,
+        command: `cat ${displayHome}/settings.json`,
       },
       {
         id: 'verify',
         title: 'Verify installation',
         description: 'Check that the hook is properly installed and configured',
-        command: `test -x ${hookDestPath} && echo "Hook script: OK" || echo "Hook script: MISSING"`,
+        command: `test -x ${displayHome}/hooks/bashback-hook.sh && grep bashback ${displayHome}/settings.json`,
       },
     ];
     res.json(steps);
