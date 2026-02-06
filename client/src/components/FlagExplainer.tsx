@@ -1,6 +1,7 @@
 import type { FlagExplanation } from '../lib/explainCommand';
 import { EditableText } from './EditableText';
 import { useDescriptions } from '../context/DescriptionsContext';
+import { API_URL } from '../lib/apiConfig';
 
 interface FlagExplainerProps {
   flags: FlagExplanation[];
@@ -20,7 +21,7 @@ async function fetchFlagExplanation(command: string, flag: string, subCommand?: 
     if (subCommand) {
       params.set('subCommand', subCommand);
     }
-    const res = await fetch(`http://localhost:3001/api/explain-flag?${params}`);
+    const res = await fetch(`${API_URL}/api/explain-flag?${params}`);
     const data = await res.json();
     if (data.explanation) {
       return {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { API_URL, WS_URL } from '../lib/apiConfig';
 
 export interface Command {
   id: string;
@@ -6,9 +7,6 @@ export interface Command {
   workspace: string;
   command: string;
 }
-
-const WS_URL = 'ws://localhost:3001';
-const API_URL = 'http://localhost:3001';
 
 export function useWebSocket() {
   const [commands, setCommands] = useState<Command[]>([]);

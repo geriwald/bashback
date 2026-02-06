@@ -3,6 +3,7 @@ import { FlagExplainer } from './FlagExplainer';
 import { EditableText } from './EditableText';
 import { useDescriptions } from '../context/DescriptionsContext';
 import { usePrivacy } from '../context/PrivacyContext';
+import { API_URL } from '../lib/apiConfig';
 
 interface CommandCardProps {
   timestamp: string;
@@ -45,7 +46,7 @@ function getOperatorTooltip(op: string): string {
 async function fetchCommandDescription(command: string): Promise<string | null> {
   try {
     const params = new URLSearchParams({ command });
-    const res = await fetch(`http://localhost:3001/api/explain-command?${params}`);
+    const res = await fetch(`${API_URL}/api/explain-command?${params}`);
     const data = await res.json();
     return data.description ?? null;
   } catch {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { API_URL } from '../lib/apiConfig';
 
 const STORAGE_KEY = 'bashback:descriptions';
-const API_URL = 'http://localhost:3001';
 
 interface CustomDescriptions {
   commands: Record<string, string>;
