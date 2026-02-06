@@ -135,8 +135,11 @@ services:
 | Operator tooltips | Explains `&&`, `\|\|`, `\|`, `>`, `>>`, etc. |
 | Heredoc handling | Collapses heredoc content for readability |
 | Inline code detection | Simplifies `node -e '...'` displays |
+| Workspace detection | Identifies projects by git root; non-git directories shown in *italics* |
 
 ![Privacy mode](docs/images/privacy-mode.png)
+
+> **Note:** bashback identifies project names from the git root directory. If Claude Code runs commands outside a git repository, the workspace name falls back to the current directory name and appears in *italics* in the UI.
 
 ## Stack
 
