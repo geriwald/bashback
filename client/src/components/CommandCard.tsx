@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react';
 import { explainCommand, COMMAND_DESCRIPTIONS, shellTokenize, isQuotedToken } from '../lib/explainCommand';
 import { FlagExplainer } from './FlagExplainer';
 import { EditableText } from './EditableText';
@@ -568,6 +569,37 @@ function renderCommand(cmd: string, knownFlags: Set<string>, redact: (s: string)
   return elements;
 }
 
+// Adaptive wrapping: break long lines at chain operators
+const WRAP_OPERATORS = new Set(['&&', '||', '|', ';']);
+
+type Segment = { type: 'command' | 'operator' | 'keyword' | 'heredoc' | 'heredoc-placeholder' | 'wrap'; value: string };
+
+function addAdaptiveWraps(segments: Segment[], maxChars: number): Segment[] {
+  if (!isFinite(maxChars) || maxChars <= 0) return segments;
+
+  const result: Segment[] = [];
+  let lineLen = 0;
+
+  for (const seg of segments) {
+    result.push(seg);
+
+    for (const ch of seg.value) {
+      if (ch === '\n') {
+        lineLen = 0;
+      } else {
+        lineLen++;
+      }
+    }
+
+    if (seg.type === 'operator' && WRAP_OPERATORS.has(seg.value.trim()) && lineLen > maxChars) {
+      result.push({ type: 'wrap', value: '↵' });
+      lineLen = 0;
+    }
+  }
+
+  return result;
+}
+
 // Check if command is multiline
 function isMultiline(cmd: string): boolean {
   return cmd.includes('\n');
@@ -581,6 +613,18 @@ function countLines(cmd: string): number {
 export function CommandCard({ timestamp, workspace, workspaceSource, command }: CommandCardProps) {
   const { getCommandDescription, setCommandDescription } = useDescriptions();
   const { redact, privacyMode } = usePrivacy();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Detect SSH commands: extract remote command and display it as if local
   const sshInfo = parseSSHCommand(command);
@@ -598,6 +642,11 @@ export function CommandCard({ timestamp, workspace, workspaceSource, command }: 
         : [s]
     );
   }
+  // Adaptive wrapping: break at operators when command overflows
+  // pre padding: p-3 = 12px × 2 = 24px; monospace text-sm char ≈ 8.4px
+  const maxChars = containerWidth > 0 ? Math.floor((containerWidth - 24) / 8.4) : Infinity;
+  const displaySegments = addAdaptiveWraps(segments as Segment[], maxChars);
+
   const commandSegments = segments.filter(s => s.type === 'command');
   const multiline = isMultiline(effectiveCommand);
   const lineCount = multiline ? countLines(effectiveCommand) : 1;
@@ -624,7 +673,7 @@ export function CommandCard({ timestamp, workspace, workspaceSource, command }: 
   });
 
   return (
-    <div className={`rounded-lg border p-4 ${sshInfo ? 'border-cyan-800 bg-gray-900/90' : 'border-gray-800 bg-gray-900'}`}>
+    <div ref={cardRef} className={`rounded-lg border p-4 ${sshInfo ? 'border-cyan-800 bg-gray-900/90' : 'border-gray-800 bg-gray-900'}`}>
       {/* Header with timestamp and workspace */}
       <div className="mb-3 flex items-center gap-2">
         <span className="rounded bg-gray-800 px-2 py-1 font-mono text-xs text-gray-400">
@@ -662,7 +711,14 @@ export function CommandCard({ timestamp, workspace, workspaceSource, command }: 
       {/* Command line */}
       <pre className="overflow-x-auto rounded bg-gray-950 p-3 mb-3">
         <code className="text-sm font-mono">
-          {segments.map((segment, i) => {
+          {displaySegments.map((segment, i) => {
+            if (segment.type === 'wrap') {
+              return (
+                <span key={i} className="select-none">
+                  <span className="text-gray-600"> ↵</span>{'\n    '}
+                </span>
+              );
+            }
             if (segment.type === 'operator') {
               return (
                 <span key={i} className="text-yellow-500 font-bold" title={getOperatorTooltip(segment.value.trim())}>
