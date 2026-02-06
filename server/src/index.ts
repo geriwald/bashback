@@ -463,27 +463,46 @@ async function main() {
     try {
       switch (stepId) {
         case 'check-jq': {
-          const { stdout } = await execAsync('which jq && jq --version 2>&1', { timeout: 5000 });
-          res.json({ success: true, output: stdout.trim() });
+          try {
+            const { stdout: whichOut } = await execAsync('which jq', { timeout: 5000 });
+            const { stdout: versionOut } = await execAsync('jq --version 2>&1', { timeout: 5000 });
+            res.json({ success: true, output: `$ which jq\n${whichOut.trim()}\n$ jq --version\n${versionOut.trim()}` });
+          } catch {
+            res.json({ success: false, output: '$ which jq\njq: not found\n\nInstall jq: apt install jq (Debian/Ubuntu) or brew install jq (macOS)' });
+          }
           break;
         }
         case 'create-hooks-dir': {
-          await execAsync(`mkdir -p "${claudeHooksDir}"`);
-          res.json({ success: true, output: `Created ${claudeHooksDir}` });
+          const { stdout, stderr } = await execAsync(`mkdir -pv "${claudeHooksDir}" 2>&1`, { timeout: 5000 });
+          const raw = (stdout + stderr).trim();
+          const lsOut = (await execAsync(`ls -la "${claudeHooksDir}/" 2>&1`, { timeout: 5000 })).stdout.trim();
+          res.json({ success: true, output: `$ mkdir -pv ~/.claude/hooks\n${raw || '(directory already exists)'}\n$ ls -la ~/.claude/hooks/\n${lsOut}` });
           break;
         }
         case 'copy-hook': {
           const hookContent = await readFile(hookSourcePath, 'utf-8');
           await writeFile(hookDestPath, hookContent, { mode: 0o755 });
-          res.json({ success: true, output: `Copied to ${hookDestPath} (executable)` });
+          const { stdout: lsOut } = await execAsync(`ls -la "${hookDestPath}"`, { timeout: 5000 });
+          const { stdout: wcOut } = await execAsync(`wc -l < "${hookDestPath}"`, { timeout: 5000 });
+          res.json({ success: true, output: `$ cp bashback-hook.sh ~/.claude/hooks/ && chmod +x ~/.claude/hooks/bashback-hook.sh\n$ ls -la ~/.claude/hooks/bashback-hook.sh\n${lsOut.trim()}\n$ wc -l < ~/.claude/hooks/bashback-hook.sh\n${wcOut.trim()} lines` });
           break;
         }
         case 'configure-settings': {
+          const output: string[] = [];
+
+          // Read existing settings
           let settings: Record<string, unknown> = {};
+          let settingsExisted = false;
           try {
-            settings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
+            const raw = await readFile(claudeSettingsPath, 'utf-8');
+            settings = JSON.parse(raw);
+            settingsExisted = true;
           } catch { /* File doesn't exist */ }
 
+          output.push(`$ cat ~/.claude/settings.json`);
+          output.push(settingsExisted ? '(file exists, reading current config)' : '(file not found, creating new config)');
+
+          // Check existing hooks
           if (!settings.hooks) settings.hooks = {};
           const hooks = settings.hooks as Record<string, unknown[]>;
           if (!hooks.PostToolUse) hooks.PostToolUse = [];
@@ -493,13 +512,24 @@ async function main() {
 
           if (bashHook) {
             if (!bashHook.hooks) bashHook.hooks = [];
+            const existingHooks = bashHook.hooks.map(h => h.command).filter(Boolean);
+            output.push(`\nExisting Bash PostToolUse hooks (${existingHooks.length}):`);
+            existingHooks.forEach(h => output.push(`  - ${h}`));
+
             const alreadyInstalled = bashHook.hooks.some(h => h.command?.includes('bashback-hook.sh'));
             if (alreadyInstalled) {
-              res.json({ success: true, output: 'Hook already configured in settings.json' });
+              output.push(`\nbashback-hook.sh already configured, skipping.`);
+              res.json({ success: true, output: output.join('\n') });
               break;
             }
+            output.push(`\nAppending bashback-hook.sh to existing Bash hooks...`);
             bashHook.hooks.push({ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' });
           } else {
+            const existingEvents = Object.keys(hooks).filter(k => (hooks[k] as unknown[]).length > 0);
+            if (existingEvents.length > 0) {
+              output.push(`\nExisting hook events: ${existingEvents.join(', ')}`);
+            }
+            output.push(`\nNo Bash PostToolUse hooks found. Creating new entry...`);
             postToolUse.push({
               matcher: 'Bash',
               hooks: [{ type: 'command', command: '~/.claude/hooks/bashback-hook.sh' }],
@@ -507,36 +537,61 @@ async function main() {
           }
 
           await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
-          res.json({ success: true, output: 'Updated ~/.claude/settings.json with bashback hook' });
+
+          // Show the resulting PostToolUse section
+          const resultSettings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
+          const resultHooks = JSON.stringify(resultSettings.hooks?.PostToolUse, null, 2);
+          output.push(`\n$ cat ~/.claude/settings.json | jq '.hooks.PostToolUse'`);
+          output.push(resultHooks);
+
+          res.json({ success: true, output: output.join('\n') });
           break;
         }
         case 'verify': {
-          const status = {
-            hookExists: existsSync(hookDestPath),
-            hookExecutable: false,
-            settingsConfigured: false,
-          };
+          const output: string[] = [];
 
+          // Check hook file
+          output.push(`$ ls -la ~/.claude/hooks/bashback-hook.sh`);
+          try {
+            const { stdout } = await execAsync(`ls -la "${hookDestPath}"`, { timeout: 5000 });
+            output.push(stdout.trim());
+          } catch {
+            output.push('ls: cannot access: No such file or directory');
+          }
+
+          // Check executable
+          output.push(`\n$ test -x ~/.claude/hooks/bashback-hook.sh && echo "executable: yes" || echo "executable: no"`);
           try {
             await execAsync(`test -x "${hookDestPath}"`);
-            status.hookExecutable = true;
-          } catch { /* not executable */ }
+            output.push('executable: yes');
+          } catch {
+            output.push('executable: no');
+          }
 
+          // Check settings
+          output.push(`\n$ grep bashback-hook ~/.claude/settings.json`);
           try {
-            const settingsContent = await readFile(claudeSettingsPath, 'utf-8');
-            status.settingsConfigured = settingsContent.includes('bashback-hook.sh');
-          } catch { /* no settings */ }
+            const { stdout } = await execAsync(`grep "bashback-hook" "${claudeSettingsPath}"`, { timeout: 5000 });
+            output.push(stdout.trim());
+          } catch {
+            output.push('(no match)');
+          }
 
-          const allGood = status.hookExists && status.hookExecutable && status.settingsConfigured;
-          const output = [
-            `Hook file: ${status.hookExists ? 'OK' : 'MISSING'}`,
-            `Executable: ${status.hookExecutable ? 'OK' : 'NO'}`,
-            `Settings: ${status.settingsConfigured ? 'OK' : 'NOT CONFIGURED'}`,
-            '',
-            allGood ? 'All checks passed! Restart Claude Code to activate.' : 'Some checks failed. Review the steps above.',
-          ].join('\n');
+          const hookOk = existsSync(hookDestPath);
+          let execOk = false;
+          try { await execAsync(`test -x "${hookDestPath}"`); execOk = true; } catch { /* */ }
+          let settingsOk = false;
+          try {
+            const c = await readFile(claudeSettingsPath, 'utf-8');
+            settingsOk = c.includes('bashback-hook.sh');
+          } catch { /* */ }
 
-          res.json({ success: allGood, output });
+          const allGood = hookOk && execOk && settingsOk;
+          output.push(allGood
+            ? '\n--- All checks passed. Restart Claude Code to activate. ---'
+            : '\n--- Some checks failed. Review the steps above. ---');
+
+          res.json({ success: allGood, output: output.join('\n') });
           break;
         }
         default:
