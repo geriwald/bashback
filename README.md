@@ -137,6 +137,10 @@ services:
 | Inline code detection | Simplifies `node -e '...'` displays |
 | Workspace detection | Identifies projects by git root; non-git directories shown in *italics* |
 
+### Privacy mode
+
+Mask IPs, credentials, tokens, home paths, and hostnames with a single click.
+
 ![Privacy mode](docs/images/privacy-mode.png)
 
 > **Note:** bashback identifies project names from the git root directory. If Claude Code runs commands outside a git repository, the workspace name falls back to the current directory name and appears in *italics* in the UI.
