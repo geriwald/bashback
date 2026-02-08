@@ -14,7 +14,38 @@ export interface ParsedPrompt {
   id: string;
 }
 
-export type ParsedEntry = ParsedCommand | ParsedPrompt;
+export interface ParsedSubagentTask {
+  type: 'subagent_task';
+  timestamp: string;
+  toolUseId: string;
+  description: string;
+  subagentType: string;
+  workspace: string;
+  workspaceSource: 'git' | 'dir';
+  id: string;
+}
+
+export interface ParsedSubagentStart {
+  type: 'subagent_start';
+  timestamp: string;
+  agentId: string;
+  agentType: string;
+  workspace: string;
+  workspaceSource: 'git' | 'dir';
+  id: string;
+}
+
+export interface ParsedSubagentStop {
+  type: 'subagent_stop';
+  timestamp: string;
+  agentId: string;
+  agentType: string;
+  workspace: string;
+  workspaceSource: 'git' | 'dir';
+  id: string;
+}
+
+export type ParsedEntry = ParsedCommand | ParsedPrompt | ParsedSubagentTask | ParsedSubagentStart | ParsedSubagentStop;
 
 // Legacy format: [2026-02-05 14:32:01] [workspace] CMD: command
 const LINE_REGEX = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[([^\]]+)\] CMD: (.+)$/;
@@ -28,6 +59,11 @@ interface JsonLogEntry {
   workspace_source?: string;
   command?: string;
   prompt?: string;
+  agent_id?: string;
+  agent_type?: string;
+  tool_use_id?: string;
+  description?: string;
+  subagent_type?: string;
 }
 
 function parseJsonLine(line: string): ParsedEntry | null {
@@ -40,6 +76,33 @@ function parseJsonLine(line: string): ParsedEntry | null {
         type: 'prompt',
         timestamp: entry.timestamp,
         prompt: entry.prompt,
+        id: `${entry.timestamp}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      };
+    }
+
+    // Subagent task (PreToolUse[Task] description capture)
+    if (entry.type === 'subagent_task' && entry.timestamp && entry.description && entry.subagent_type) {
+      return {
+        type: 'subagent_task',
+        timestamp: entry.timestamp,
+        toolUseId: entry.tool_use_id || '',
+        description: entry.description,
+        subagentType: entry.subagent_type,
+        workspace: entry.workspace || 'unknown',
+        workspaceSource: (entry.workspace_source === 'git' ? 'git' : 'dir') as 'git' | 'dir',
+        id: `${entry.timestamp}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      };
+    }
+
+    // Subagent start/stop
+    if ((entry.type === 'subagent_start' || entry.type === 'subagent_stop') && entry.timestamp && entry.agent_id) {
+      return {
+        type: entry.type as 'subagent_start' | 'subagent_stop',
+        timestamp: entry.timestamp,
+        agentId: entry.agent_id,
+        agentType: entry.agent_type || 'unknown',
+        workspace: entry.workspace || 'unknown',
+        workspaceSource: (entry.workspace_source === 'git' ? 'git' : 'dir') as 'git' | 'dir',
         id: `${entry.timestamp}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       };
     }

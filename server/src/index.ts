@@ -331,6 +331,8 @@ async function main() {
   const hookDestPath = join(claudeHooksDir, 'bashback-hook.sh');
   const promptHookSourcePath = join(__dirname, '../../hook/bashback-prompt-hook.sh');
   const promptHookDestPath = join(claudeHooksDir, 'bashback-prompt-hook.sh');
+  const subagentHookSourcePath = join(__dirname, '../../hook/bashback-subagent-hook.sh');
+  const subagentHookDestPath = join(claudeHooksDir, 'bashback-subagent-hook.sh');
 
   // Check if hooks are installed
   app.get('/api/hook-status', async (_req, res) => {
@@ -353,9 +355,19 @@ async function main() {
         promptHookExists = false;
       }
 
+      // Check if subagent hook file exists
+      let subagentHookExists = false;
+      try {
+        await readFile(subagentHookDestPath);
+        subagentHookExists = true;
+      } catch {
+        subagentHookExists = false;
+      }
+
       // Check if settings.json has the hooks configured
       let hookConfigured = false;
       let promptHookConfigured = false;
+      let subagentHookConfigured = false;
       try {
         const settings = JSON.parse(await readFile(claudeSettingsPath, 'utf-8'));
         const postToolUse = settings.hooks?.PostToolUse || [];
@@ -367,9 +379,23 @@ async function main() {
         promptHookConfigured = userPromptSubmit.some((h: { hooks?: { command?: string }[] }) =>
           h.hooks?.some((hh: { command?: string }) => hh.command?.includes('bashback-prompt-hook.sh'))
         );
+        const subagentStart = settings.hooks?.SubagentStart || [];
+        const subagentStop = settings.hooks?.SubagentStop || [];
+        const preToolUseTask = (settings.hooks?.PreToolUse || []).filter((h: { matcher?: string }) => h.matcher === 'Task');
+        subagentHookConfigured =
+          subagentStart.some((h: { hooks?: { command?: string }[] }) =>
+            h.hooks?.some((hh: { command?: string }) => hh.command?.includes('bashback-subagent-hook.sh'))
+          ) &&
+          subagentStop.some((h: { hooks?: { command?: string }[] }) =>
+            h.hooks?.some((hh: { command?: string }) => hh.command?.includes('bashback-subagent-hook.sh'))
+          ) &&
+          preToolUseTask.some((h: { hooks?: { command?: string }[] }) =>
+            h.hooks?.some((hh: { command?: string }) => hh.command?.includes('bashback-subagent-hook.sh'))
+          );
       } catch {
         hookConfigured = false;
         promptHookConfigured = false;
+        subagentHookConfigured = false;
       }
 
       res.json({
@@ -379,6 +405,9 @@ async function main() {
         promptHookInstalled: promptHookExists && promptHookConfigured,
         promptHookExists,
         promptHookConfigured,
+        subagentHookInstalled: subagentHookExists && subagentHookConfigured,
+        subagentHookExists,
+        subagentHookConfigured,
       });
     } catch (error) {
       console.error('Error checking hook status:', error);
@@ -391,11 +420,13 @@ async function main() {
     try {
       await execAsync(`mkdir -p "${claudeHooksDir}"`);
 
-      // Copy both hook scripts
+      // Copy all hook scripts
       const hookContent = await readFile(hookSourcePath, 'utf-8');
       await writeFile(hookDestPath, hookContent, { mode: 0o755 });
       const promptHookContent = await readFile(promptHookSourcePath, 'utf-8');
       await writeFile(promptHookDestPath, promptHookContent, { mode: 0o755 });
+      const subagentHookContent = await readFile(subagentHookSourcePath, 'utf-8');
+      await writeFile(subagentHookDestPath, subagentHookContent, { mode: 0o755 });
 
       let settings: Record<string, unknown> = {};
       try {
@@ -432,6 +463,35 @@ async function main() {
       if (!existingPromptHook) {
         userPromptSubmit.push({
           hooks: [{ type: 'command', command: '~/.claude/hooks/bashback-prompt-hook.sh' }],
+        });
+      }
+
+      const subagentHookEntry = { type: 'command', command: '~/.claude/hooks/bashback-subagent-hook.sh' };
+
+      // SubagentStart
+      if (!hooksConfig.SubagentStart) hooksConfig.SubagentStart = [];
+      const subagentStart = hooksConfig.SubagentStart as { hooks?: { type?: string; command?: string }[] }[];
+      if (!subagentStart.some(h => h.hooks?.some(hh => hh.command?.includes('bashback-subagent-hook.sh')))) {
+        subagentStart.push({ hooks: [subagentHookEntry] });
+      }
+
+      // SubagentStop
+      if (!hooksConfig.SubagentStop) hooksConfig.SubagentStop = [];
+      const subagentStop = hooksConfig.SubagentStop as { hooks?: { type?: string; command?: string }[] }[];
+      if (!subagentStop.some(h => h.hooks?.some(hh => hh.command?.includes('bashback-subagent-hook.sh')))) {
+        subagentStop.push({ hooks: [subagentHookEntry] });
+      }
+
+      // PreToolUse[Task] (task description capture)
+      if (!hooksConfig.PreToolUse) hooksConfig.PreToolUse = [];
+      const preToolUse2 = hooksConfig.PreToolUse as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
+      const existingTaskHook = preToolUse2.find(h =>
+        h.matcher === 'Task' && h.hooks?.some(hh => hh.command?.includes('bashback-subagent-hook.sh'))
+      );
+      if (!existingTaskHook) {
+        preToolUse2.push({
+          matcher: 'Task',
+          hooks: [subagentHookEntry],
         });
       }
 
@@ -476,20 +536,20 @@ async function main() {
       {
         id: 'copy-hook',
         title: 'Copy hook scripts',
-        description: 'Copy bashback-hook.sh and bashback-prompt-hook.sh to the Claude hooks directory',
+        description: 'Copy bashback-hook.sh, bashback-prompt-hook.sh, and bashback-subagent-hook.sh to the Claude hooks directory',
         command: `cp bashback-*.sh ${displayHome}/hooks/ && chmod +x ${displayHome}/hooks/bashback-*.sh`,
       },
       {
         id: 'configure-settings',
         title: 'Configure Claude settings',
-        description: 'Add hooks for PostToolUse (Bash commands) and UserPromptSubmit (user prompts) in settings.json',
+        description: 'Add hooks for PostToolUse, UserPromptSubmit, SubagentStart, SubagentStop, and PreToolUse[Task] in settings.json',
         command: `jq '.hooks' ${displayHome}/settings.json`,
       },
       {
         id: 'verify',
         title: 'Verify installation',
-        description: 'Check that both hooks are properly installed and configured',
-        command: `test -x ${displayHome}/hooks/bashback-hook.sh && test -x ${displayHome}/hooks/bashback-prompt-hook.sh && grep bashback ${displayHome}/settings.json`,
+        description: 'Check that all hooks are properly installed and configured',
+        command: `test -x ${displayHome}/hooks/bashback-hook.sh && test -x ${displayHome}/hooks/bashback-prompt-hook.sh && test -x ${displayHome}/hooks/bashback-subagent-hook.sh && grep bashback ${displayHome}/settings.json`,
       },
     ];
     res.json(steps);
@@ -522,6 +582,8 @@ async function main() {
           await writeFile(hookDestPath, hookContent, { mode: 0o755 });
           const promptHookContent = await readFile(promptHookSourcePath, 'utf-8');
           await writeFile(promptHookDestPath, promptHookContent, { mode: 0o755 });
+          const subagentHookContent = await readFile(subagentHookSourcePath, 'utf-8');
+          await writeFile(subagentHookDestPath, subagentHookContent, { mode: 0o755 });
           const { stdout: lsOut } = await execAsync(`ls -la "${claudeHooksDir}"/bashback-*.sh`, { timeout: 5000 });
           res.json({ success: true, output: `$ cp bashback-*.sh ~/.claude/hooks/ && chmod +x ~/.claude/hooks/bashback-*.sh\n$ ls -la ~/.claude/hooks/bashback-*.sh\n${lsOut.trim()}` });
           break;
@@ -583,6 +645,39 @@ async function main() {
             output.push('Created UserPromptSubmit entry with bashback-prompt-hook.sh');
           }
 
+          // --- Subagent hooks ---
+          const subagentHookCmd = { type: 'command', command: '~/.claude/hooks/bashback-subagent-hook.sh' };
+
+          output.push('\n# SubagentStart');
+          if (!hooks.SubagentStart) hooks.SubagentStart = [];
+          const saStart = hooks.SubagentStart as { hooks?: { type?: string; command?: string }[] }[];
+          if (saStart.some(h => h.hooks?.some(hh => hh.command?.includes('bashback-subagent-hook.sh')))) {
+            output.push('bashback-subagent-hook.sh already configured');
+          } else {
+            saStart.push({ hooks: [subagentHookCmd] });
+            output.push('Created SubagentStart entry');
+          }
+
+          output.push('\n# SubagentStop');
+          if (!hooks.SubagentStop) hooks.SubagentStop = [];
+          const saStop = hooks.SubagentStop as { hooks?: { type?: string; command?: string }[] }[];
+          if (saStop.some(h => h.hooks?.some(hh => hh.command?.includes('bashback-subagent-hook.sh')))) {
+            output.push('bashback-subagent-hook.sh already configured');
+          } else {
+            saStop.push({ hooks: [subagentHookCmd] });
+            output.push('Created SubagentStop entry');
+          }
+
+          output.push('\n# PreToolUse[Task] (subagent descriptions)');
+          if (!hooks.PreToolUse) hooks.PreToolUse = [];
+          const ptu = hooks.PreToolUse as { matcher?: string; hooks?: { type?: string; command?: string }[] }[];
+          if (ptu.some(h => h.matcher === 'Task' && h.hooks?.some(hh => hh.command?.includes('bashback-subagent-hook.sh')))) {
+            output.push('bashback-subagent-hook.sh already configured for Task');
+          } else {
+            ptu.push({ matcher: 'Task', hooks: [subagentHookCmd] });
+            output.push('Created PreToolUse[Task] entry');
+          }
+
           await writeFile(claudeSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 
           // Show result
@@ -608,27 +703,34 @@ async function main() {
           // Check executables
           const hookOk = existsSync(hookDestPath);
           const promptHookOk = existsSync(promptHookDestPath);
+          const subagentHookOk = existsSync(subagentHookDestPath);
           let execOk = false;
           let promptExecOk = false;
+          let subagentExecOk = false;
           try { await execAsync(`test -x "${hookDestPath}"`); execOk = true; } catch { /* */ }
           try { await execAsync(`test -x "${promptHookDestPath}"`); promptExecOk = true; } catch { /* */ }
+          try { await execAsync(`test -x "${subagentHookDestPath}"`); subagentExecOk = true; } catch { /* */ }
 
           output.push(`\nbashback-hook.sh: ${hookOk && execOk ? 'OK' : 'MISSING'}`);
           output.push(`bashback-prompt-hook.sh: ${promptHookOk && promptExecOk ? 'OK' : 'MISSING'}`);
+          output.push(`bashback-subagent-hook.sh: ${subagentHookOk && subagentExecOk ? 'OK' : 'MISSING'}`);
 
           // Check settings
           let settingsOk = false;
           let promptSettingsOk = false;
+          let subagentSettingsOk = false;
           try {
             const c = await readFile(claudeSettingsPath, 'utf-8');
             settingsOk = c.includes('bashback-hook.sh');
             promptSettingsOk = c.includes('bashback-prompt-hook.sh');
+            subagentSettingsOk = c.includes('bashback-subagent-hook.sh');
           } catch { /* */ }
 
           output.push(`\nPostToolUse config: ${settingsOk ? 'OK' : 'MISSING'}`);
           output.push(`UserPromptSubmit config: ${promptSettingsOk ? 'OK' : 'MISSING'}`);
+          output.push(`SubagentStart/Stop/PreToolUse[Task] config: ${subagentSettingsOk ? 'OK' : 'MISSING'}`);
 
-          const allGood = hookOk && execOk && settingsOk && promptHookOk && promptExecOk && promptSettingsOk;
+          const allGood = hookOk && execOk && settingsOk && promptHookOk && promptExecOk && promptSettingsOk && subagentHookOk && subagentExecOk && subagentSettingsOk;
           if (!allGood) {
             output.push('\n--- Some checks failed. Review the steps above. ---');
           }
@@ -686,6 +788,12 @@ async function main() {
         type: 'prompt',
         data: { id: entry.id, timestamp: entry.timestamp, prompt: cleanPrompt, corrections },
       });
+    } else if (entry.type === 'subagent_task' || entry.type === 'subagent_start' || entry.type === 'subagent_stop') {
+      const label = entry.type === 'subagent_task'
+        ? `${entry.subagentType}: ${entry.description}`
+        : `${entry.agentType} (${entry.agentId})`;
+      console.log(`bashback: ${entry.type}: ${label}`);
+      broadcast({ type: entry.type, data: entry });
     } else {
       console.log(`bashback: new command: ${entry.command}`);
       broadcast({ type: 'command', data: entry });

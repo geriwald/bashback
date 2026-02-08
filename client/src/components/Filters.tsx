@@ -1,5 +1,16 @@
+import type { SubagentRecord } from '../hooks/useWebSocket';
+
 // Shell keywords (displayed in pink)
 const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'fi', 'for', 'do', 'done', 'while', 'until', 'case', 'esac', 'function']);
+
+function formatDuration(start: string, stop: string): string {
+  const startDate = new Date(start.replace(' ', 'T'));
+  const stopDate = new Date(stop.replace(' ', 'T'));
+  const diffMs = stopDate.getTime() - startDate.getTime();
+  if (diffMs < 1000) return `${diffMs}ms`;
+  if (diffMs < 60000) return `${(diffMs / 1000).toFixed(1)}s`;
+  return `${Math.floor(diffMs / 60000)}m ${Math.round((diffMs % 60000) / 1000)}s`;
+}
 
 interface FiltersProps {
   workspaces: string[];
@@ -15,6 +26,7 @@ interface FiltersProps {
   filteredCount: number;
   totalCount: number;
   hasFilters: boolean;
+  subagents: SubagentRecord[];
 }
 
 export function Filters({
@@ -31,6 +43,7 @@ export function Filters({
   filteredCount,
   totalCount,
   hasFilters,
+  subagents,
 }: FiltersProps) {
   const hasWorkspaces = workspaces.length > 0;
   const hasCommands = baseCommands.length > 0;
@@ -142,6 +155,43 @@ export function Filters({
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Subagents */}
+      {subagents.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-2">
+            Agents ({subagents.length})
+          </span>
+          <div className="space-y-1.5">
+            {[...subagents].reverse().map((sa) => (
+              <div
+                key={sa.id}
+                className={`rounded px-2 py-1.5 text-xs ${
+                  sa.status === 'running'
+                    ? 'bg-indigo-950/50 border border-indigo-800'
+                    : 'bg-gray-800/50 border border-gray-700/50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  {sa.status === 'running' ? (
+                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400 shrink-0" />
+                  ) : (
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                  )}
+                  <span className="font-semibold text-indigo-300">{sa.agentType}</span>
+                  <span className={`text-blue-400/60${sa.workspaceSource === 'dir' ? ' italic' : ''}`}>{sa.workspace}</span>
+                  {sa.status === 'completed' && sa.stopTimestamp && (
+                    <span className="ml-auto text-green-400/70">{formatDuration(sa.startTimestamp, sa.stopTimestamp)}</span>
+                  )}
+                </div>
+                {sa.description && (
+                  <p className="mt-0.5 text-gray-400 truncate" title={sa.description}>{sa.description}</p>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

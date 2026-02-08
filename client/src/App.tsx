@@ -68,7 +68,7 @@ function EasterEggPanel() {
 }
 
 export default function App() {
-  const { commands, prompts, connected, clearLog } = useWebSocket();
+  const { commands, prompts, subagents, connected, clearLog } = useWebSocket();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
   const [selectedCommand, setSelectedCommand] = useState<string | null>(null);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
@@ -154,6 +154,7 @@ export default function App() {
           filteredCount={filteredCommands.length}
           totalCount={commands.length}
           hasFilters={!!(selectedWorkspace || selectedCommand || selectedOperator)}
+          subagents={subagents}
         />
 
         <main className="flex-1 overflow-hidden">
